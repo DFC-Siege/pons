@@ -28,14 +28,14 @@ result::Result<Response> HttpClient::request(esp_http_client_method_t method,
                 return result::err("failed to open http connection");
         }
 
-        auto content_length = esp_http_client_fetch_headers(client);
+        const auto content_length = esp_http_client_fetch_headers(client);
         if (content_length < 0) {
                 esp_http_client_cleanup(client);
                 return result::err("failed to fetch headers");
         }
 
         std::vector<uint8_t> response_body(content_length);
-        auto read = esp_http_client_read_response(
+        const auto read = esp_http_client_read_response(
             client, reinterpret_cast<char *>(response_body.data()),
             content_length);
         if (read < 0) {
