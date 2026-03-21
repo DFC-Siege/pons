@@ -18,4 +18,9 @@ else()
         DESTINATION include/pons
         FILES_MATCHING PATTERN "*.hpp"
     )
+
+    add_executable(ble_transport_test ble_transport_test.cpp)
+    target_link_libraries(ble_transport_test PRIVATE Catch2::Catch2WithMain ble_transport platform_async)
+    target_compile_features(ble_transport_test PRIVATE cxx_std_23)
+    catch_discover_tests(ble_transport_test)
 endif()
