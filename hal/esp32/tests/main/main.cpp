@@ -3,6 +3,7 @@
 
 #include "ble_hal_test.hpp"
 #include "http_client_test.hpp"
+#include "logger_test.hpp"
 #include "semaphore_test.hpp"
 
 extern "C" void app_main() {
@@ -16,5 +17,6 @@ extern "C" void app_main() {
         run_semaphore_tests();
         run_ble_hal_tests();
         run_http_client_tests();
+        run_logger_tests();
         UNITY_END();
 }

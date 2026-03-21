@@ -4,7 +4,6 @@ set(PONS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
 
 set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/core/logger
-    ${PONS_DIR}/core/logger/console_logger
     ${PONS_DIR}/core/core_async
     ${PONS_DIR}/core/result
     ${PONS_DIR}/hal/esp32/esp32_async
@@ -12,6 +11,7 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/hal/esp32/esp32_ble_hal
     ${PONS_DIR}/hal/http_client
     ${PONS_DIR}/hal/esp32/esp32_http_client
+    ${PONS_DIR}/hal/esp32/esp32_logger
 )
 
 set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.local")

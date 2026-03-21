@@ -1,8 +1,8 @@
 #include <esp_log.h>
 #include <esp_system.h>
 
+#include "esp32_logger.hpp"
 #include "i_logger.hpp"
-#include "logger.hpp"
 
 namespace logging {
 
