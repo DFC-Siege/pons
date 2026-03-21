@@ -15,7 +15,7 @@ test:
 	cd $(BUILD_DIR) && ctest --output-on-failure
 
 test-esp32:
-	cd hal/esp32/tests && idf.py set-target esp32c3 build flash monitor
+	cd hal/esp32/tests && idf.py build flash monitor
 
 install:
 	cmake --install $(BUILD_DIR)
