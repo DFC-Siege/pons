@@ -3,57 +3,62 @@ cmake_minimum_required(VERSION 3.16)
 set(PLATFORM "posix" CACHE STRING "Target platform (esp32, stm32, posix)")
 
 if(ESP_PLATFORM)
-    set(EXTRA_COMPONENT_DIRS
-        ${CMAKE_CURRENT_SOURCE_DIR}/core/core_async
-        ${CMAKE_CURRENT_SOURCE_DIR}/core/result
-        ${CMAKE_CURRENT_SOURCE_DIR}/core/logger
-        ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
-        ${CMAKE_CURRENT_SOURCE_DIR}/hal/esp32/esp32_async
-        ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
-        ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
-        ${CMAKE_CURRENT_SOURCE_DIR}/hal/http_client
-        ${CMAKE_CURRENT_SOURCE_DIR}/platform/${PLATFORM}/platform_async
-        ${CMAKE_CURRENT_SOURCE_DIR}/transport
-        ${CMAKE_CURRENT_SOURCE_DIR}/transport/chunked_transport
-    )
-    include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-    project(pons)
+        set(EXTRA_COMPONENT_DIRS
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/result
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/core_async
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/logger
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
+                ${CMAKE_CURRENT_SOURCE_DIR}/hal/esp32/esp32_async
+                ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
+                ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
+                ${CMAKE_CURRENT_SOURCE_DIR}/hal/http_client
+                ${CMAKE_CURRENT_SOURCE_DIR}/platform/${PLATFORM}/platform_async
+                ${CMAKE_CURRENT_SOURCE_DIR}/transport
+                ${CMAKE_CURRENT_SOURCE_DIR}/transport/chunked_transport
+        )
+        include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+        project(pons)
 else()
-    project(pons CXX)
+        project(pons CXX)
 
-    set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install prefix")
+        set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install prefix")
 
-    add_subdirectory(core/core_async)
-    add_subdirectory(core/result)
-    add_subdirectory(core/logger)
-    add_subdirectory(core/logger/console_logger)
-    add_subdirectory(hal/serial_hal)
-    add_subdirectory(hal/${PLATFORM}/${PLATFORM}_async)
-    add_subdirectory(hal/${PLATFORM}/${PLATFORM}_serial_hal)
-    add_subdirectory(platform/${PLATFORM}/platform_async)
-    add_subdirectory(transport)
-    add_subdirectory(transport/chunked_transport)
+        add_subdirectory(core/result)
+        add_subdirectory(core/store)
+        add_subdirectory(core/core_async)
+        add_subdirectory(core/logger)
+        add_subdirectory(core/logger/console_logger)
+        add_subdirectory(hal/ble_hal)
+        add_subdirectory(hal/serial_hal)
+        add_subdirectory(hal/http_client)
+        add_subdirectory(hal/${PLATFORM}/${PLATFORM}_async)
+        add_subdirectory(hal/${PLATFORM}/${PLATFORM}_serial_hal)
+        add_subdirectory(platform/${PLATFORM}/platform_async)
+        add_subdirectory(transport)
+        add_subdirectory(transport/chunked_transport)
+        add_subdirectory(transport/chunked_transport/serial_transport)
+        add_subdirectory(transport/chunked_transport/ble_transport)
 
-    install(EXPORT pons-targets
-        FILE pons-targets.cmake
-        NAMESPACE pons::
-        DESTINATION lib/cmake/pons
-    )
+        install(EXPORT pons-targets
+                FILE pons-targets.cmake
+                NAMESPACE pons::
+                DESTINATION lib/cmake/pons
+        )
 
-    include(CMakePackageConfigHelpers)
-    configure_package_config_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pons-config.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/pons-config.cmake
-        INSTALL_DESTINATION lib/cmake/pons
-    )
-    write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/pons-config-version.cmake
-        VERSION 0.1.0
-        COMPATIBILITY SameMajorVersion
-    )
-    install(FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/pons-config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/pons-config-version.cmake
-        DESTINATION lib/cmake/pons
-    )
+        include(CMakePackageConfigHelpers)
+        configure_package_config_file(
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pons-config.cmake.in
+                ${CMAKE_CURRENT_BINARY_DIR}/pons-config.cmake
+                INSTALL_DESTINATION lib/cmake/pons
+        )
+        write_basic_package_version_file(
+                ${CMAKE_CURRENT_BINARY_DIR}/pons-config-version.cmake
+                VERSION 0.1.0
+                COMPATIBILITY SameMajorVersion
+        )
+        install(FILES
+                ${CMAKE_CURRENT_BINARY_DIR}/pons-config.cmake
+                ${CMAKE_CURRENT_BINARY_DIR}/pons-config-version.cmake
+                DESTINATION lib/cmake/pons
+        )
 endif()
