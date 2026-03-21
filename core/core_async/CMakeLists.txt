@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.16)
-
 if(ESP_PLATFORM)
     idf_component_register(
         COMPONENT_NAME core_async
