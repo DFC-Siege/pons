@@ -36,4 +36,5 @@ clean-all:
 rebuild: clean build
 
 compile-commands:
-	ln -sf $(BUILD_DIR)/compile_commands.json compile_commands.json
+	cmake -B build-posix -DPLATFORM=posix -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	ln -sf build-posix/compile_commands.json compile_commands.json
