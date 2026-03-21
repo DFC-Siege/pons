@@ -1,0 +1,17 @@
+CompileFlags:
+  Add: ["-Wno-unknown-argument"]
+  Remove:
+    [
+      -fno-shrink-wrap,
+      -mlongcalls,
+      -fstrict-volatile-bitfields,
+      -fno-tree-switch-conversion,
+      -mtext-section-literals,
+      -mfix-esp32-psram-cache-issue,
+      -mfix-esp32-psram-cache-strategy*,
+      -fstack-protector,
+      -fexceptions,
+    ]
+
+Diagnostics:
+  UnusedIncludes: None
