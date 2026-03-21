@@ -1,0 +1,21 @@
+if(ESP_PLATFORM)
+    idf_component_register(
+        SRCS "ble_transporter.cpp"
+        INCLUDE_DIRS "."
+        REQUIRES result logger ble_hal chunked_transport transport
+    )
+else()
+    add_library(ble_transport ble_transporter.cpp)
+    target_include_directories(ble_transport PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/pons>
+    )
+    target_link_libraries(ble_transport PUBLIC result ble_hal chunked_transport transport logger)
+    target_compile_features(ble_transport PUBLIC cxx_std_23)
+
+    install(TARGETS ble_transport EXPORT pons-targets)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
+        DESTINATION include/pons
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+endif()
