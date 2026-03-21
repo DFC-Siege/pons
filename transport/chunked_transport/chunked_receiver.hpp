@@ -29,6 +29,7 @@ class ChunkedReceiver : public IReceiver {
         uint16_t current_index = 0;
         uint8_t max_attempts;
         uint8_t current_attempt = 0;
+        bool completed = false;
 
         std::vector<uint8_t> reconstruct_data(std::vector<Chunk> chunks) const;
         result::Result<bool> ack(bool success);

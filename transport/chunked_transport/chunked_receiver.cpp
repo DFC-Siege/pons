@@ -39,6 +39,10 @@ ChunkedReceiver::start(uint8_t session_id, uint8_t command,
 }
 
 result::Result<bool> ChunkedReceiver::receive(std::span<const uint8_t> data) {
+        if (completed) {
+                return result::err("receiver has already completed");
+        }
+
         const auto chunk_result = Chunk::from_buf(data);
         if (chunk_result.failed()) {
                 return ack(false);
@@ -59,6 +63,7 @@ result::Result<bool> ChunkedReceiver::receive(std::span<const uint8_t> data) {
         received_chunks.push_back(chunk);
 
         if (chunk.index == chunk.total_chunks - 1) {
+                completed = true;
                 on_complete(reconstruct_data(received_chunks));
                 received_chunks.clear();
         }
