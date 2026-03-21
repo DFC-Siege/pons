@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+
 if(ESP_PLATFORM)
     idf_component_register(
         COMPONENT_NAME core_async
@@ -16,4 +18,11 @@ else()
         DESTINATION include/pons
         FILES_MATCHING PATTERN "*.hpp"
     )
+endif()
+
+if(NOT ESP_PLATFORM)
+    add_executable(core_async_test core_async_test.cpp)
+    target_link_libraries(core_async_test PRIVATE Catch2::Catch2WithMain core_async)
+    target_compile_features(core_async_test PRIVATE cxx_std_23)
+    catch_discover_tests(core_async_test)
 endif()
