@@ -6,6 +6,7 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/core/logger
     ${PONS_DIR}/core/core_async
     ${PONS_DIR}/core/result
+    ${PONS_DIR}/core/store
     ${PONS_DIR}/hal/esp32/esp32_async
     ${PONS_DIR}/hal/ble_hal
     ${PONS_DIR}/hal/esp32/esp32_ble_hal
@@ -14,6 +15,7 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/hal/esp32/esp32_logger
     ${PONS_DIR}/hal/serial_hal
     ${PONS_DIR}/hal/esp32/esp32_serial_hal
+    ${PONS_DIR}/hal/esp32/esp32_store/nvs_store
 )
 
 set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.local")
