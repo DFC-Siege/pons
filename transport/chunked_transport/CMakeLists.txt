@@ -23,6 +23,7 @@ else()
         )
 
         add_executable(chunked_transport_test
+                packet_test.cpp
                 chunked_receiver_test.cpp
                 chunked_sender_test.cpp
                 chunked_transporter_test.cpp
