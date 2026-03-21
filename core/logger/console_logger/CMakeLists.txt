@@ -19,3 +19,10 @@ else()
         FILES_MATCHING PATTERN "*.hpp"
     )
 endif()
+
+if(NOT ESP_PLATFORM)
+    add_executable(console_logger_test console_logger_test.cpp)
+    target_link_libraries(console_logger_test PRIVATE Catch2::Catch2WithMain console_logger)
+    target_compile_features(console_logger_test PRIVATE cxx_std_23)
+    catch_discover_tests(console_logger_test)
+endif()

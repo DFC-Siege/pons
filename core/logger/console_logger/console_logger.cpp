@@ -24,6 +24,6 @@ void ConsoleLogger::println(LogLevel level, std::string_view tag,
 }
 
 bool ConsoleLogger::check_level(LogLevel level) {
-        return this->level >= level;
+        return this->level <= level;
 }
 } // namespace logging

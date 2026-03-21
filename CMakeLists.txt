@@ -21,6 +21,16 @@ if(ESP_PLATFORM)
 else()
         project(pons CXX)
 
+        include(FetchContent)
+        FetchContent_Declare(
+                Catch2
+                GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+                GIT_TAG v3.5.0
+        )
+        FetchContent_MakeAvailable(Catch2)
+        include(CTest)
+        include(Catch)
+        enable_testing()
         set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install prefix")
 
         add_subdirectory(core/result)
