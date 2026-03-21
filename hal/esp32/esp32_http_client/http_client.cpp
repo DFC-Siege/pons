@@ -2,12 +2,33 @@
 
 namespace http {
 
+struct ResponseCollector {
+        std::vector<uint8_t> *body;
+};
+
+static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
+        if (evt->event_id == HTTP_EVENT_ON_DATA) {
+                auto *collector =
+                    static_cast<ResponseCollector *>(evt->user_data);
+                const auto *data = static_cast<const uint8_t *>(evt->data);
+                collector->body->insert(collector->body->end(), data,
+                                        data + evt->data_len);
+        }
+        return ESP_OK;
+}
+
 result::Result<Response> HttpClient::request(esp_http_client_method_t method,
                                              std::string_view url,
                                              const Headers &headers,
                                              std::span<const uint8_t> body) {
+        std::vector<uint8_t> response_body;
+        ResponseCollector collector{&response_body};
+
         esp_http_client_config_t config{};
         config.url = url.data();
+        config.timeout_ms = 5000;
+        config.event_handler = http_event_handler;
+        config.user_data = &collector;
 
         auto client = esp_http_client_init(&config);
         if (!client)
@@ -18,31 +39,17 @@ result::Result<Response> HttpClient::request(esp_http_client_method_t method,
         for (const auto &[key, value] : headers)
                 esp_http_client_set_header(client, key.data(), value.data());
 
-        if (!body.empty())
+        if (!body.empty()) {
                 esp_http_client_set_post_field(
                     client, reinterpret_cast<const char *>(body.data()),
-                    body.size());
-
-        if (esp_http_client_open(client, body.size()) != ESP_OK) {
-                esp_http_client_cleanup(client);
-                return result::err("failed to open http connection");
+                    static_cast<int>(body.size()));
         }
 
-        const auto content_length = esp_http_client_fetch_headers(client);
-        if (content_length < 0) {
+        esp_err_t err = esp_http_client_perform(client);
+        if (err != ESP_OK) {
                 esp_http_client_cleanup(client);
-                return result::err("failed to fetch headers");
+                return result::err("http request failed");
         }
-
-        std::vector<uint8_t> response_body(content_length);
-        const auto read = esp_http_client_read_response(
-            client, reinterpret_cast<char *>(response_body.data()),
-            content_length);
-        if (read < 0) {
-                esp_http_client_cleanup(client);
-                return result::err("failed to read response");
-        }
-        response_body.resize(read);
 
         Response response{
             .status_code = esp_http_client_get_status_code(client),

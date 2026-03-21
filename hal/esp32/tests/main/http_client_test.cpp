@@ -1,9 +1,11 @@
 #include <cstring>
 #include <esp_event.h>
+#include <esp_log.h>
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
+#include <string>
 #include <unity.h>
 
 #include "http_client.hpp"
@@ -69,6 +71,12 @@ static void test_post_returns_200() {
         http::HttpClient client;
         const std::vector<uint8_t> body = {0x01, 0x02, 0x03};
         const auto result = client.post(POST_URL, {}, body);
+
+        if (result.failed()) {
+                ESP_LOGE("TEST", "POST request failed: %s",
+                         std::string(result.error()).c_str());
+        }
+
         TEST_ASSERT_FALSE(result.failed());
         TEST_ASSERT_EQUAL(200, result.value().status_code);
 }
