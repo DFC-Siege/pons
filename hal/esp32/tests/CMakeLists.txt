@@ -12,6 +12,8 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/hal/http_client
     ${PONS_DIR}/hal/esp32/esp32_http_client
     ${PONS_DIR}/hal/esp32/esp32_logger
+    ${PONS_DIR}/hal/serial_hal
+    ${PONS_DIR}/hal/esp32/esp32_serial_hal
 )
 
 set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.local")

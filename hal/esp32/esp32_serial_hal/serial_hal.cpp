@@ -24,6 +24,10 @@ SerialHal::SerialHal() {
 }
 
 result::Result<bool> SerialHal::send(std::span<const uint8_t> data) {
+        if (data.empty()) {
+                return result::ok();
+        }
+
         const auto response =
             uart_write_bytes(UART_NUM_1, data.data(), data.size());
         if (response < 0) {

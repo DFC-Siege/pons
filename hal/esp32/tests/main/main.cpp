@@ -5,6 +5,7 @@
 #include "http_client_test.hpp"
 #include "logger_test.hpp"
 #include "semaphore_test.hpp"
+#include "serial_hal_test.hpp"
 
 extern "C" void app_main() {
         esp_err_t ret = nvs_flash_init();
@@ -18,5 +19,6 @@ extern "C" void app_main() {
         run_ble_hal_tests();
         run_http_client_tests();
         run_logger_tests();
+        run_serial_hal_tests();
         UNITY_END();
 }
