@@ -1,4 +1,7 @@
-PLATFORM ?= posix
+-include .env
+export WIFI_SSID
+export WIFI_PASSPLATFORM ?= posix
+
 BUILD_DIR := build-$(PLATFORM)
 
 .PHONY: all build clean clean-all test rebuild
@@ -14,8 +17,12 @@ test:
 	cmake --build $(BUILD_DIR)
 	cd $(BUILD_DIR) && ctest --output-on-failure
 
-test-esp32:
-	cd hal/esp32/tests && idf.py build flash monitor
+hal/esp32/tests/sdkconfig.local:
+	@echo 'CONFIG_EXAMPLE_WIFI_SSID=$(WIFI_SSID)' > hal/esp32/tests/sdkconfig.local
+	@echo 'CONFIG_EXAMPLE_WIFI_PASSWORD=$(WIFI_PASS)' >> hal/esp32/tests/sdkconfig.local
+
+test-esp32: hal/esp32/tests/sdkconfig.local
+	cd hal/esp32/tests && idf.py set-target esp32c3 build flash monitor
 
 install:
 	cmake --install $(BUILD_DIR)

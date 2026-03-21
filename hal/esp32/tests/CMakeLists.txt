@@ -10,6 +10,8 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/hal/esp32/esp32_async
     ${PONS_DIR}/hal/ble_hal
     ${PONS_DIR}/hal/esp32/esp32_ble_hal
+    ${PONS_DIR}/hal/http_client
+    ${PONS_DIR}/hal/esp32/esp32_http_client
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

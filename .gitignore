@@ -1,3 +1,5 @@
 /.cache/clangd/index
 /build-posix
 /hal/esp32/tests/build
+/.env
+/hal/esp32/tests/sdkconfig.local
