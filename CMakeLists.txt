@@ -7,6 +7,7 @@ if(ESP_PLATFORM)
         ${CMAKE_CURRENT_SOURCE_DIR}/core/core_async
         ${CMAKE_CURRENT_SOURCE_DIR}/core/result
         ${CMAKE_CURRENT_SOURCE_DIR}/core/logger
+        ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/esp32/esp32_async
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
         ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
@@ -25,6 +26,7 @@ else()
     add_subdirectory(core/core_async)
     add_subdirectory(core/result)
     add_subdirectory(core/logger)
+    add_subdirectory(core/logger/console_logger)
     add_subdirectory(hal/${PLATFORM}/${PLATFORM}_async)
     add_subdirectory(platform/${PLATFORM}/platform_async)
     add_subdirectory(transport)
