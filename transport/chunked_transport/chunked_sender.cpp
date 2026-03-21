@@ -114,7 +114,7 @@ result::Result<Chunk> ChunkedSender::get_next() {
 }
 
 result::Result<Chunk> ChunkedSender::repeat() {
-        if (++current_attempt >= max_attempts) {
+        if (++current_attempt > max_attempts) {
                 return result::err("max attempts reached");
         }
         return get_chunk();

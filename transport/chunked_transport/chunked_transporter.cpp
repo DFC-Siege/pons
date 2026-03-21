@@ -10,7 +10,8 @@
 #include "result.hpp"
 
 namespace transport {
-ChunkedTransporter::ChunkedTransporter(uint16_t mtu) : mtu(mtu) {
+ChunkedTransporter::ChunkedTransporter(uint16_t mtu, uint8_t max_attempts)
+    : mtu(mtu), max_attempts(max_attempts) {
         for (uint8_t i = 0; i < 255; i++) {
                 available_sender_sessions.insert(i);
                 available_receiver_sessions.insert(i);
@@ -61,7 +62,7 @@ ChunkedTransporter::send(uint8_t command, std::span<const uint8_t> data,
         const auto session = session_result.value();
 
         error_callbacks[session] = on_error;
-        senders[session] = std::make_unique<ChunkedSender>(mtu, session);
+        senders[session] = std::make_unique<ChunkedSender>(mtu, max_attempts);
         const auto &sender = senders[session];
         const auto result = sender->send(
             session, command, data,
@@ -69,8 +70,8 @@ ChunkedTransporter::send(uint8_t command, std::span<const uint8_t> data,
                     return this->concrete_send(data);
             },
             [on_complete, session, this]() {
-                    remove_sender(session);
                     on_complete();
+                    remove_sender(session);
             });
         if (result.failed()) {
                 return result;
@@ -112,8 +113,8 @@ ChunkedTransporter::request(uint8_t command, std::span<const uint8_t> payload,
                     return this->concrete_send(data);
             },
             [on_complete, session, this](std::vector<uint8_t> data) {
-                    remove_receiver(session);
                     on_complete(data);
+                    remove_receiver(session);
             });
         if (result.failed()) {
                 return result;

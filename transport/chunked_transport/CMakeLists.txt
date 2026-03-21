@@ -25,8 +25,9 @@ else()
         add_executable(chunked_transport_test
                 chunked_receiver_test.cpp
                 chunked_sender_test.cpp
+                chunked_transporter_test.cpp
         )
-        target_link_libraries(chunked_transport_test PRIVATE Catch2::Catch2WithMain chunked_transport)
+        target_link_libraries(chunked_transport_test PRIVATE Catch2::Catch2WithMain chunked_transport platform_async)
         target_compile_features(chunked_transport_test PRIVATE cxx_std_23)
         catch_discover_tests(chunked_transport_test)
 endif()

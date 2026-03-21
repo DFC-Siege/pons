@@ -33,7 +33,7 @@ struct MockBleHal : ble::IBleHal {
 
 TEST_CASE("concrete_send forwards data to ble hal") {
         MockBleHal hal;
-        transport::BleTransporter transporter(512, hal);
+        transport::BleTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
         const auto result =
@@ -44,7 +44,7 @@ TEST_CASE("concrete_send forwards data to ble hal") {
 
 TEST_CASE("send_async returns non-null future") {
         MockBleHal hal;
-        transport::BleTransporter transporter(512, hal);
+        transport::BleTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x01};
         auto future = transporter.send_async(0x01, data);
@@ -53,7 +53,7 @@ TEST_CASE("send_async returns non-null future") {
 
 TEST_CASE("feed returns error on empty data") {
         MockBleHal hal;
-        transport::BleTransporter transporter(512, hal);
+        transport::BleTransporter transporter(512, 1, hal);
 
         const auto result = transporter.feed({});
         REQUIRE(result.failed());
@@ -61,7 +61,7 @@ TEST_CASE("feed returns error on empty data") {
 
 TEST_CASE("feed returns error on unknown session") {
         MockBleHal hal;
-        transport::BleTransporter transporter(512, hal);
+        transport::BleTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x00, 0x00, 0x00, 0x00, 0x00};
         const auto result = transporter.feed(data);
@@ -70,7 +70,7 @@ TEST_CASE("feed returns error on unknown session") {
 
 TEST_CASE("receive callback triggers feed") {
         MockBleHal hal;
-        transport::BleTransporter transporter(512, hal);
+        transport::BleTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x00, 0x00, 0x00, 0x00, 0x00};
         hal.simulate_receive(data);

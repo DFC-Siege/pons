@@ -7,9 +7,9 @@
 #include "serial_transporter.hpp"
 
 namespace transport {
-SerialTransporter::SerialTransporter(uint16_t mtu,
+SerialTransporter::SerialTransporter(uint16_t mtu, uint8_t max_attempts,
                                      serial::ISerialHal &serial_hal)
-    : ChunkedTransporter(mtu), serial_hal(serial_hal) {
+    : ChunkedTransporter(mtu, max_attempts), serial_hal(serial_hal) {
         serial_hal.on_receive([this](std::span<const uint8_t> data) {
                 const auto result = feed(data);
                 if (result.failed()) {

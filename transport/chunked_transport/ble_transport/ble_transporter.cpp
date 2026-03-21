@@ -7,8 +7,9 @@
 #include "result.hpp"
 
 namespace transport {
-BleTransporter::BleTransporter(uint16_t mtu, ble::IBleHal &ble_hal)
-    : ChunkedTransporter(mtu), ble_hal(ble_hal) {
+BleTransporter::BleTransporter(uint16_t mtu, uint8_t max_attempts,
+                               ble::IBleHal &ble_hal)
+    : ChunkedTransporter(mtu, max_attempts), ble_hal(ble_hal) {
         ble_hal.on_receive([this](std::span<const uint8_t> data) {
                 const auto result = feed(data);
                 if (result.failed()) {

@@ -11,7 +11,8 @@
 namespace transport {
 class SerialTransporter : public ChunkedTransporter {
       public:
-        SerialTransporter(uint16_t mtu, serial::ISerialHal &serial_hal);
+        SerialTransporter(uint16_t mtu, uint8_t max_attempts,
+                          serial::ISerialHal &serial_hal);
 
         result::Result<bool>
         concrete_send(std::span<const uint8_t> data) override;

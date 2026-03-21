@@ -11,7 +11,7 @@
 namespace transport {
 class ChunkedTransporter : public ITransporter {
       public:
-        ChunkedTransporter(uint16_t mtu);
+        ChunkedTransporter(uint16_t mtu, uint8_t max_attempts);
 
         result::Result<FeedResult> feed(std::span<const uint8_t> data) override;
 
@@ -38,8 +38,9 @@ class ChunkedTransporter : public ITransporter {
         std::unordered_map<uint8_t, ErrorCallback> error_callbacks;
         std::set<uint8_t> available_sender_sessions;
         std::set<uint8_t> available_receiver_sessions;
-        uint8_t next_session_id = 0;
         uint16_t mtu;
+        uint8_t max_attempts = 0;
+        uint8_t next_session_id = 0;
 
         result::Result<uint8_t> next_receiver_session();
         result::Result<uint8_t> next_sender_session();

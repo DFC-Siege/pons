@@ -21,21 +21,34 @@ class BaseFuture : public IFuture<T> {
         }
 
         T get() override {
-                sem.take();
+                if (!ready)
+                        sem.take();
+                ready = true;
                 return std::move(value);
         }
 
         bool wait_for(uint32_t timeout_ms) override {
-                return sem.take(timeout_ms);
+                if (ready)
+                        return true;
+                const auto result = sem.take(timeout_ms);
+                if (result)
+                        ready = true;
+                return result;
         }
 
         bool is_ready() override {
-                return wait_for(0);
+                if (ready)
+                        return true;
+                const auto result = sem.take(0);
+                if (result)
+                        ready = true;
+                return result;
         }
 
       private:
         Sem sem;
         T value;
+        bool ready = false;
 };
 
 } // namespace async

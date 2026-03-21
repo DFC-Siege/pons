@@ -30,7 +30,7 @@ struct MockSerialHal : serial::ISerialHal {
 
 TEST_CASE("concrete_send forwards data to serial hal") {
         MockSerialHal hal;
-        transport::SerialTransporter transporter(512, hal);
+        transport::SerialTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
         const auto result =
@@ -41,7 +41,7 @@ TEST_CASE("concrete_send forwards data to serial hal") {
 
 TEST_CASE("send_async returns non-null future") {
         MockSerialHal hal;
-        transport::SerialTransporter transporter(512, hal);
+        transport::SerialTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x01};
         auto future = transporter.send_async(0x01, data);
@@ -50,7 +50,7 @@ TEST_CASE("send_async returns non-null future") {
 
 TEST_CASE("feed returns error on empty data") {
         MockSerialHal hal;
-        transport::SerialTransporter transporter(512, hal);
+        transport::SerialTransporter transporter(512, 1, hal);
 
         const auto result = transporter.feed({});
         REQUIRE(result.failed());
@@ -58,7 +58,7 @@ TEST_CASE("feed returns error on empty data") {
 
 TEST_CASE("feed returns error on unknown session") {
         MockSerialHal hal;
-        transport::SerialTransporter transporter(512, hal);
+        transport::SerialTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x00, 0x00, 0x00, 0x00, 0x00};
         const auto result = transporter.feed(data);
@@ -67,7 +67,7 @@ TEST_CASE("feed returns error on unknown session") {
 
 TEST_CASE("receive callback triggers feed") {
         MockSerialHal hal;
-        transport::SerialTransporter transporter(512, hal);
+        transport::SerialTransporter transporter(512, 1, hal);
 
         const std::vector<uint8_t> data = {0x00, 0x00, 0x00, 0x00, 0x00};
         hal.simulate_receive(data);

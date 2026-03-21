@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <thread>
 
@@ -9,8 +10,9 @@
 
 struct TestSemaphore {
         void give() {
-                cv.notify_one();
+                std::unique_lock lock(mutex);
                 ready = true;
+                cv.notify_one();
         }
         void give_from_isr() {
                 give();
@@ -39,11 +41,31 @@ struct TestSemaphore {
 
 static_assert(async::SemaphoreConcept<TestSemaphore>);
 
+static bool wait_with_timeout(std::function<void()> fn, uint32_t timeout_ms) {
+        std::atomic<bool> done = false;
+        std::thread t([&] {
+                fn();
+                done = true;
+        });
+        t.detach();
+        const auto start = std::chrono::steady_clock::now();
+        while (!done) {
+                if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start)
+                        .count() > timeout_ms)
+                        return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return true;
+}
+
 TEST_CASE("promise set_value is received by future get") {
         async::BasePromise<int, TestSemaphore> promise;
         auto future = promise.get_future();
         std::thread t([&] { promise.set_value(42); });
-        REQUIRE(future->get() == 42);
+        int result = 0;
+        REQUIRE(wait_with_timeout([&] { result = future->get(); }, 1000));
+        REQUIRE(result == 42);
         t.join();
 }
 
@@ -81,6 +103,30 @@ TEST_CASE("future works with string type") {
         async::BasePromise<std::string, TestSemaphore> promise;
         auto future = promise.get_future();
         std::thread t([&] { promise.set_value("hello"); });
-        REQUIRE(future->get() == "hello");
+        std::string result;
+        REQUIRE(wait_with_timeout([&] { result = future->get(); }, 1000));
+        REQUIRE(result == "hello");
         t.join();
+}
+
+TEST_CASE("wait_for then get returns value") {
+        async::BasePromise<int, TestSemaphore> promise;
+        auto future = promise.get_future();
+        promise.set_value(42);
+        REQUIRE(future->wait_for(100));
+        int result = 0;
+        const auto completed =
+            wait_with_timeout([&] { result = future->get(); }, 100);
+        REQUIRE(completed);
+        REQUIRE(result == 42);
+}
+
+TEST_CASE("is_ready then get returns value") {
+        async::BasePromise<int, TestSemaphore> promise;
+        auto future = promise.get_future();
+        promise.set_value(42);
+        REQUIRE(future->is_ready());
+        int result = 0;
+        REQUIRE(wait_with_timeout([&] { result = future->get(); }, 1000));
+        REQUIRE(result == 42);
 }

@@ -93,7 +93,7 @@ TEST_CASE("receive returns error after max attempts exceeded") {
 
         const std::vector<uint8_t> bad_data = {0x00};
         result::Result<bool> result = result::ok();
-        for (int i = 0; i <= 3; i++)
+        for (int i = 0; i <= 2; i++)
                 result = receiver.receive(bad_data);
 
         REQUIRE(result.failed());
