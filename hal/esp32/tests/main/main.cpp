@@ -1,3 +1,4 @@
+#include <nvs_flash.h>
 #include <unity.h>
 
 #include "ble_hal_test.hpp"
@@ -5,6 +6,12 @@
 #include "semaphore_test.hpp"
 
 extern "C" void app_main() {
+        esp_err_t ret = nvs_flash_init();
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+            ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+                nvs_flash_erase();
+                nvs_flash_init();
+        }
         UNITY_BEGIN();
         run_semaphore_tests();
         run_ble_hal_tests();

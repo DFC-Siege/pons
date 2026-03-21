@@ -14,5 +14,7 @@ set(EXTRA_COMPONENT_DIRS
     ${PONS_DIR}/hal/esp32/esp32_http_client
 )
 
+set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.local")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp32_hal_tests)
