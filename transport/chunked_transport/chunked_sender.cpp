@@ -89,14 +89,14 @@ ChunkedSender::create_chunks(std::span<const uint8_t> data) const {
                     std::min<size_t>(payload_size, data.size() - offset);
                 auto payload = std::vector<uint8_t>(
                     data.begin() + offset, data.begin() + offset + size);
-                const auto checksum = crc16(data);
+                const auto checksum = crc16(payload);
                 chunks.emplace_back(std::move(payload), i, total_chunks,
                                     checksum, session_id, command);
         }
 
         if (chunks.empty()) {
                 const auto payload = std::vector<uint8_t>();
-                const auto checksum = crc16(data);
+                const auto checksum = crc16(payload);
                 chunks.emplace_back(std::move(payload), 0, 1, checksum,
                                     session_id, command);
         }
