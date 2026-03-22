@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(PLATFORM "posix" CACHE STRING "Target platform (esp32, stm32, posix)")
+set(PLATFORM "posix" CACHE STRING "Target platform (esp32, stm32, posix, rp2040)")
 
 if(ESP_PLATFORM)
         set(EXTRA_COMPONENT_DIRS
@@ -19,8 +19,34 @@ if(ESP_PLATFORM)
         )
         include($ENV{IDF_PATH}/tools/cmake/project.cmake)
         project(pons)
+
+elseif(PLATFORM STREQUAL "rp2040")
+        include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+        project(pons C CXX ASM)
+        set(CMAKE_CXX_STANDARD 20)
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
+        set(CMAKE_CXX_EXTENSIONS OFF)
+        pico_sdk_init()
+
+        add_compile_options(-Wno-free-nonheap-object)
+
+        add_subdirectory(core/result)
+        add_subdirectory(core/core_async)
+        add_subdirectory(core/logger)
+        add_subdirectory(hal/ble_hal)
+        add_subdirectory(hal/serial_hal)
+        add_subdirectory(hal/store)
+        add_subdirectory(hal/rp2040/rp2040_async)
+        add_subdirectory(hal/rp2040/rp2040_serial_hal)
+        add_subdirectory(platform/rp2040/platform_async)
+        add_subdirectory(transport)
+        add_subdirectory(transport/chunked_transport)
+        add_subdirectory(transport/chunked_transport/serial_transport)
+
 else()
         project(pons CXX)
+        set(CMAKE_CXX_STANDARD 23)
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
         include(FetchContent)
         FetchContent_Declare(
@@ -32,6 +58,7 @@ else()
         include(CTest)
         include(Catch)
         enable_testing()
+
         set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install prefix")
 
         add_subdirectory(core/result)
@@ -55,7 +82,6 @@ else()
                 NAMESPACE pons::
                 DESTINATION lib/cmake/pons
         )
-
         include(CMakePackageConfigHelpers)
         configure_package_config_file(
                 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/pons-config.cmake.in

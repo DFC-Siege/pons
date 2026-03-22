@@ -6,3 +6,4 @@
 /hal/esp32/tests/sdkconfig.old
 /hal/esp32/tests/sdkconfig
 /build-
+/build-rp2040

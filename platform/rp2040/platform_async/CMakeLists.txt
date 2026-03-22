@@ -3,7 +3,7 @@ target_include_directories(platform_async INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include/pons>
 )
-target_link_libraries(platform_async INTERFACE core_async posix_async)
+target_link_libraries(platform_async INTERFACE core_async rp2040_async)
 target_compile_features(platform_async INTERFACE cxx_std_20)
 
 install(TARGETS platform_async EXPORT pons-targets)
