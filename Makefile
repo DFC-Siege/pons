@@ -54,6 +54,19 @@ compile-commands-rp2040:
 	cmake -B build-rp2040 -DPLATFORM=rp2040 -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 	ln -sf build-rp2040/compile_commands.json compile_commands_rp2040.json
 
+build-rp2040-tests:
+	cmake -B build-rp2040-tests \
+		-S hal/rp2040/tests \
+		-DCMAKE_TOOLCHAIN_FILE=$(PICO_SDK_PATH)/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake \
+		-G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	cmake --build build-rp2040-tests
+
+flash-rp2040-tests:
+	cp build-rp2040-tests/main/rp2040_hal_tests.uf2 /media/$(USER)/RPI-RP2/
+
+monitor-rp2040:
+	minicom -b 115200 -D /dev/ttyACM0
+
 # ── GENERIC ──────────────────────────────────────────────────────────────────
 
 all: build-posix
