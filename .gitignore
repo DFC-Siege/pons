@@ -8,3 +8,6 @@
 /build-
 /build-rp2040
 /build-rp2040-tests
+/compile_commands_esp32.json
+/compile_commands.json
+/compile_commands_rp2040.json
