@@ -5,3 +5,4 @@
 /hal/esp32/tests/sdkconfig.local
 /hal/esp32/tests/sdkconfig.old
 /hal/esp32/tests/sdkconfig
+/build-

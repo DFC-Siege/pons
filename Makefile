@@ -1,7 +1,8 @@
 -include .env
 export WIFI_SSID
-export WIFI_PASSPLATFORM ?= posix
+export WIFI_PASS
 
+PLATFORM ?= posix
 BUILD_DIR := build-$(PLATFORM)
 
 .PHONY: all build clean clean-all test rebuild
