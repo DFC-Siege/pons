@@ -19,21 +19,21 @@ static uint16_t crc16(std::span<const uint8_t> data) {
 }
 
 enum class PacketType : uint8_t {
-        chunk = 0x01,
-        ack = 0x02,
+        chunk = 0x00,
+        ack = 0x01,
+        nack = 0x02,
+        fin = 0x03,
 };
 
 struct Ack {
         static constexpr uint8_t SESSION_ID_OFFSET = 3;
         uint16_t index;
         uint8_t session_id;
-        bool success;
 
         std::vector<uint8_t> to_buf() const {
                 return {static_cast<uint8_t>(PacketType::ack),
                         static_cast<uint8_t>(index & 0xFF),
-                        static_cast<uint8_t>((index >> 8) & 0xFF), session_id,
-                        static_cast<uint8_t>(success)};
+                        static_cast<uint8_t>((index >> 8) & 0xFF), session_id};
         }
 
         static result::Result<Ack> from_buf(std::span<const uint8_t> buf) {
@@ -42,27 +42,47 @@ struct Ack {
                 if (static_cast<PacketType>(buf[0]) != PacketType::ack)
                         return result::err("invalid packet type");
                 return result::ok(
-                    Ack{static_cast<uint16_t>(buf[1] | (buf[2] << 8)), buf[3],
-                        static_cast<bool>(buf[4])});
+                    Ack{static_cast<uint16_t>(buf[1] | (buf[2] << 8)), buf[3]});
+        }
+};
+
+struct Nack {
+        static constexpr uint8_t SESSION_ID_OFFSET = 3;
+        uint16_t index;
+        uint8_t session_id;
+
+        std::vector<uint8_t> to_buf() const {
+                return {static_cast<uint8_t>(PacketType::nack),
+                        static_cast<uint8_t>(index & 0xFF),
+                        static_cast<uint8_t>((index >> 8) & 0xFF), session_id};
+        }
+
+        static result::Result<Nack> from_buf(std::span<const uint8_t> buf) {
+                if (buf.size() < 5)
+                        return result::err("buffer too small");
+                if (static_cast<PacketType>(buf[0]) != PacketType::nack)
+                        return result::err("invalid packet type");
+                return result::ok(Nack{
+                    static_cast<uint16_t>(buf[1] | (buf[2] << 8)), buf[3]});
         }
 };
 
 struct Chunk {
-        static constexpr auto HEADER_SIZE = 9;
-        static constexpr uint8_t SESSION_ID_OFFSET = 7;
-        static constexpr uint8_t TYPE_OFFSET = 0;
+        static constexpr PacketType TYPE = PacketType::chunk;
         std::vector<uint8_t> payload;
         uint16_t index;
         uint16_t total_chunks;
         uint16_t checksum;
-        uint8_t session_id;
-        uint8_t command;
+        static constexpr auto TYPE_SIZE = sizeof(TYPE);
+        static constexpr auto INDEX_SIZE = sizeof(index);
+        static constexpr auto COUNT_SIZE = sizeof(total_chunks);
+        static constexpr auto CHECKSUM_SIZE = sizeof(checksum);
+        static constexpr auto HEADER_SIZE =
+            TYPE_SIZE + INDEX_SIZE + COUNT_SIZE + CHECKSUM_SIZE;
 
         std::vector<uint8_t> to_buf() const {
                 std::vector<uint8_t> buf;
-                buf.reserve(1 + sizeof(index) + sizeof(total_chunks) +
-                            sizeof(checksum) + sizeof(session_id) +
-                            sizeof(command) + payload.size());
+                buf.reserve(HEADER_SIZE + payload.size());
                 buf.push_back(static_cast<uint8_t>(PacketType::chunk));
                 auto push16 = [&](uint16_t val) {
                         buf.push_back(val & 0xFF);
@@ -71,8 +91,6 @@ struct Chunk {
                 push16(index);
                 push16(total_chunks);
                 push16(checksum);
-                buf.push_back(session_id);
-                buf.push_back(command);
                 buf.insert(buf.end(), payload.begin(), payload.end());
                 return buf;
         }
@@ -89,11 +107,9 @@ struct Chunk {
                 };
 
                 Chunk chunk;
-                chunk.index = pull16(1);
-                chunk.total_chunks = pull16(3);
-                chunk.checksum = pull16(5);
-                chunk.session_id = buf[7];
-                chunk.command = buf[8];
+                chunk.index = pull16(TYPE_SIZE);
+                chunk.total_chunks = pull16(TYPE_SIZE + INDEX_SIZE);
+                chunk.checksum = pull16(TYPE_SIZE + INDEX_SIZE + COUNT_SIZE);
                 chunk.payload =
                     std::vector<uint8_t>(buf.begin() + HEADER_SIZE, buf.end());
 

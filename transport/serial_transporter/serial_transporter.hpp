@@ -1,24 +1,23 @@
 #pragma once
 
 #include <cstdint>
-#include <set>
-#include <span>
+#include <memory>
+#include <queue>
+#include <vector>
 
-#include "i_future.hpp"
+#include "i_serial_hal.hpp"
 #include "result.hpp"
 #include "transporter.hpp"
 
 namespace transport {
-template <Transporter T> class ChunkedTransporter {
+class SerialTransporter {
       public:
-        ChunkedTransporter(T &transporter, uint16_t mtu, uint8_t max_attempts);
-
+        SerialTransporter(serial::ISerialHal &serial_hal);
         result::Result<bool> send(std::span<const uint8_t> data);
         result::Result<std::vector<uint8_t>> receive();
 
       private:
-        T &transporter;
-        uint16_t mtu;
-        uint8_t max_attempts = 0;
+        static constexpr auto TIMEOUT = 1000;
+        serial::ISerialHal &serial_hal;
 };
 } // namespace transport
