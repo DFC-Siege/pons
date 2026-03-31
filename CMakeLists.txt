@@ -42,7 +42,6 @@ elseif(PLATFORM STREQUAL "rp2040")
         add_subdirectory(transport)
         add_subdirectory(transport/chunked_transport)
         add_subdirectory(transport/chunked_transport/serial_transport)
-
 else()
         project(pons CXX)
         set(CMAKE_CXX_STANDARD 23)

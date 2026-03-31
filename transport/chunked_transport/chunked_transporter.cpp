@@ -20,10 +20,11 @@ ChunkedTransporter::ChunkedTransporter(uint16_t mtu, uint8_t max_attempts)
 
 result::Result<FeedResult>
 ChunkedTransporter::feed(std::span<const uint8_t> data) {
-        if (data.empty())
+        if (data.empty()) {
                 return result::err("data is empty");
+        }
 
-        switch (static_cast<PacketType>(data[0])) {
+        switch (static_cast<PacketType>(data[Chunk::TYPE_OFFSET])) {
         case PacketType::chunk: {
                 if (data.size() < Chunk::HEADER_SIZE)
                         return result::err("buffer too small");

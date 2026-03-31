@@ -50,6 +50,7 @@ struct Ack {
 struct Chunk {
         static constexpr auto HEADER_SIZE = 9;
         static constexpr uint8_t SESSION_ID_OFFSET = 7;
+        static constexpr uint8_t TYPE_OFFSET = 0;
         std::vector<uint8_t> payload;
         uint16_t index;
         uint16_t total_chunks;
