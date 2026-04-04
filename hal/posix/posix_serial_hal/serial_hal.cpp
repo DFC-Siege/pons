@@ -30,7 +30,7 @@ SerialHal::~SerialHal() {
                 close(fd);
 }
 
-result::Result<bool> SerialHal::send(std::span<const uint8_t> data) {
+result::Result<bool> SerialHal::send(Data &&data) {
         const auto written = write(fd, data.data(), data.size());
         if (written < 0)
                 return result::err("failed to write to serial port");

@@ -19,18 +19,15 @@ static int open_pty_pair(int &master, int &slave) {
 TEST_CASE("send writes data to serial port") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
-
         serial::SerialHal hal(ptsname(master));
-
-        const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
-        const auto result = hal.send(data);
+        std::vector<uint8_t> data = {0x01, 0x02, 0x03};
+        const auto expected = data;
+        const auto result = hal.send(std::move(data));
         REQUIRE(!result.failed());
-
-        std::vector<uint8_t> buf(data.size());
+        std::vector<uint8_t> buf(expected.size());
         const auto n = read(master, buf.data(), buf.size());
-        REQUIRE(n == (int)data.size());
-        REQUIRE(buf == data);
-
+        REQUIRE(n == (int)expected.size());
+        REQUIRE(buf == expected);
         close(master);
         close(slave);
 }

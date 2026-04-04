@@ -16,7 +16,7 @@ class SerialHal : public ISerialHal {
         SerialHal(const SerialHal &) = delete;
         SerialHal &operator=(const SerialHal &) = delete;
 
-        result::Result<bool> send(std::span<const uint8_t> data) override;
+        result::Result<bool> send(Data &&data) override;
         void on_receive(ReceiveCallback cb) override;
         result::Result<bool> loop() override;
 

@@ -24,7 +24,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                                     result.error());
                                 return;
                         }
-                        handle_data(std::move(result.value()));
+                        handle_data(std::move(result).value());
                 });
         };
 
