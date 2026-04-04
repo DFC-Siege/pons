@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <string>
 
 #include "i_logger.hpp"
 #include "logger.hpp"
@@ -20,6 +21,12 @@ SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu)
 }
 
 result::Result<bool> SerialTransporter::send(Data &&data) {
+        if (data.size() > mtu) {
+                return result::err("data bigger(" +
+                                   std::to_string(data.size()) +
+                                   ") than mtu: " + std::to_string(mtu));
+        }
+
         return this->serial_hal.send(std::move(data));
 }
 

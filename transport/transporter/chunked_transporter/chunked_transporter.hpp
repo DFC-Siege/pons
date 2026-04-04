@@ -81,7 +81,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
             const SessionId next_session_id) const {
                 if (chunks.size() >= std::numeric_limits<SessionId>::max()) {
                         return result::err(
-                            "transport: maximum concurrent sessions reached");
+                            "maximum concurrent sessions reached");
                 }
 
                 SessionId candidate = next_session_id;
