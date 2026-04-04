@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <driver/uart.h>
 #include <hal/uart_types.h>
-#include <vector>
 
 #include "result.hpp"
 #include "serial_hal.hpp"
@@ -39,20 +38,27 @@ result::Result<bool> SerialHal::send(std::span<const uint8_t> data) {
         return result::ok();
 }
 
-result::Result<std::vector<uint8_t>> SerialHal::read(uint32_t timeout) {
+void SerialHal::on_receive(ReceiveCallback cb) {
+        receive_callback = std::move(cb);
+}
+
+result::Result<bool> SerialHal::loop() {
         std::vector<uint8_t> data(BUF_SIZE);
-        int length =
-            uart_read_bytes(UART_NUM_1, data.data(), BUF_SIZE, timeout);
+        int length = uart_read_bytes(UART_NUM_1, data.data(), BUF_SIZE, 0);
         if (length < 0) {
                 return result::err(
                     "something went wrong while reading over serial");
         }
 
         if (length == 0) {
-                return result::err("empty response");
+                return result::ok();
         }
 
         data.resize(length);
-        return result::ok(data);
+
+        if (receive_callback) {
+                receive_callback(data);
+        }
+        return result::ok();
 }
 } // namespace serial
