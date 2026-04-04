@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 #include "data.hpp"
@@ -14,8 +16,8 @@ using Indexer = uint16_t;
 
 static CRC crc16(DataView data) {
         CRC crc = 0;
-        for (const auto byte : data) {
-                crc ^= byte;
+        for (const auto unit : data) {
+                crc ^= unit;
                 for (int i = 0; i < sizeof(Unit) * 8; i++) {
                         crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
                 }
@@ -30,96 +32,134 @@ enum class PacketType : uint8_t {
         fin = 0x03,
 };
 
+namespace detail {
+template <typename T> void push_le(Data &buf, T val) {
+        if constexpr (std::is_enum_v<T>) {
+                push_le(buf, static_cast<std::underlying_type_t<T>>(val));
+        } else {
+                constexpr size_t bits_per_unit = sizeof(Unit) * 8;
+                for (size_t i = 0; i < sizeof(T); ++i) {
+                        buf.push_back(static_cast<Unit>(
+                            (val >> (i * bits_per_unit)) & 0xFF));
+                }
+        }
+}
+
+template <typename T> T pull_le(DataView buf, size_t offset) {
+        if constexpr (std::is_enum_v<T>) {
+                return static_cast<T>(
+                    pull_le<std::underlying_type_t<T>>(buf, offset));
+        } else {
+                T val = 0;
+                constexpr size_t bits_per_unit = sizeof(Unit) * 8;
+                for (size_t i = 0; i < sizeof(T); ++i) {
+                        val |= (static_cast<T>(buf[offset + i])
+                                << (i * bits_per_unit));
+                }
+                return val;
+        }
+}
+} // namespace detail
+
 struct Ack {
-        static constexpr uint8_t SESSION_ID_OFFSET = 3;
         Indexer index;
         SessionId session_id;
 
+        static constexpr size_t MIN_SIZE =
+            sizeof(PacketType) + sizeof(Indexer) + sizeof(SessionId);
+
         Data to_buf() const {
-                return {static_cast<Unit>(PacketType::ack),
-                        static_cast<Unit>(index & 0xFF),
-                        static_cast<Unit>((index >> 8) & 0xFF), session_id};
+                Data buf;
+                buf.reserve(MIN_SIZE);
+                detail::push_le(buf, PacketType::ack);
+                detail::push_le(buf, index);
+                detail::push_le(buf, session_id);
+                return buf;
         }
 
         static result::Result<Ack> from_buf(DataView buf) {
-                if (buf.size() < 5)
+                if (buf.size() < MIN_SIZE)
                         return result::err("buffer too small");
-                if (static_cast<PacketType>(buf[0]) != PacketType::ack)
+                if (detail::pull_le<PacketType>(buf, 0) != PacketType::ack)
                         return result::err("invalid packet type");
-                return result::ok(
-                    Ack{static_cast<Indexer>(buf[1] | (buf[2] << 8)), buf[3]});
+
+                size_t offset = sizeof(PacketType);
+                Indexer idx = detail::pull_le<Indexer>(buf, offset);
+                offset += sizeof(Indexer);
+                SessionId sid = detail::pull_le<SessionId>(buf, offset);
+
+                return result::ok(Ack{idx, sid});
         }
 };
 
 struct Nack {
-        static constexpr uint8_t SESSION_ID_OFFSET = 3;
         Indexer index;
         SessionId session_id;
 
+        static constexpr size_t MIN_SIZE =
+            sizeof(PacketType) + sizeof(Indexer) + sizeof(SessionId);
+
         Data to_buf() const {
-                return {static_cast<Unit>(PacketType::nack),
-                        static_cast<Unit>(index & 0xFF),
-                        static_cast<Unit>((index >> 8) & 0xFF), session_id};
+                Data buf;
+                buf.reserve(MIN_SIZE);
+                detail::push_le(buf, PacketType::nack);
+                detail::push_le(buf, index);
+                detail::push_le(buf, session_id);
+                return buf;
         }
 
         static result::Result<Nack> from_buf(DataView buf) {
-                if (buf.size() < 5)
+                if (buf.size() < MIN_SIZE)
                         return result::err("buffer too small");
-                if (static_cast<PacketType>(buf[0]) != PacketType::nack)
+                if (detail::pull_le<PacketType>(buf, 0) != PacketType::nack)
                         return result::err("invalid packet type");
-                return result::ok(
-                    Nack{static_cast<Indexer>(buf[1] | (buf[2] << 8)), buf[3]});
+
+                size_t offset = sizeof(PacketType);
+                Indexer idx = detail::pull_le<Indexer>(buf, offset);
+                offset += sizeof(Indexer);
+                SessionId sid = detail::pull_le<SessionId>(buf, offset);
+
+                return result::ok(Nack{idx, sid});
         }
 };
 
 struct Chunk {
-        static constexpr PacketType TYPE = PacketType::chunk;
         Data payload;
         Indexer index;
         Indexer total_chunks;
         CRC checksum;
-        static constexpr auto TYPE_SIZE = sizeof(TYPE);
-        static constexpr auto INDEX_SIZE = sizeof(index);
-        static constexpr auto COUNT_SIZE = sizeof(total_chunks);
-        static constexpr auto CHECKSUM_SIZE = sizeof(checksum);
-        static constexpr auto HEADER_SIZE =
-            TYPE_SIZE + INDEX_SIZE + COUNT_SIZE + CHECKSUM_SIZE;
 
-        std::vector<uint8_t> to_buf() const {
-                std::vector<uint8_t> buf;
+        static constexpr size_t HEADER_SIZE =
+            sizeof(PacketType) + (sizeof(Indexer) * 2) + sizeof(CRC);
+
+        Data to_buf() const {
+                Data buf;
                 buf.reserve(HEADER_SIZE + payload.size());
-                buf.push_back(static_cast<uint8_t>(PacketType::chunk));
-                auto push16 = [&](uint16_t val) {
-                        buf.push_back(val & 0xFF);
-                        buf.push_back((val >> 8) & 0xFF);
-                };
-                push16(index);
-                push16(total_chunks);
-                push16(checksum);
+                detail::push_le(buf, PacketType::chunk);
+                detail::push_le(buf, index);
+                detail::push_le(buf, total_chunks);
+                detail::push_le(buf, checksum);
                 buf.insert(buf.end(), payload.begin(), payload.end());
                 return buf;
         }
 
-        static result::Result<Chunk> from_buf(std::span<const uint8_t> buf) {
+        static result::Result<Chunk> from_buf(DataView buf) {
                 if (buf.size() < HEADER_SIZE)
                         return result::err("buffer too small");
-                if (static_cast<PacketType>(buf[0]) != PacketType::chunk)
+                if (detail::pull_le<PacketType>(buf, 0) != PacketType::chunk)
                         return result::err("invalid packet type");
 
-                auto pull16 = [&](size_t offset) -> uint16_t {
-                        return static_cast<uint16_t>(buf[offset] |
-                                                     (buf[offset + 1] << 8));
-                };
-
+                size_t offset = sizeof(PacketType);
                 Chunk chunk;
-                chunk.index = pull16(TYPE_SIZE);
-                chunk.total_chunks = pull16(TYPE_SIZE + INDEX_SIZE);
-                chunk.checksum = pull16(TYPE_SIZE + INDEX_SIZE + COUNT_SIZE);
-                chunk.payload =
-                    std::vector<uint8_t>(buf.begin() + HEADER_SIZE, buf.end());
+                chunk.index = detail::pull_le<Indexer>(buf, offset);
+                offset += sizeof(Indexer);
+                chunk.total_chunks = detail::pull_le<Indexer>(buf, offset);
+                offset += sizeof(Indexer);
+                chunk.checksum = detail::pull_le<CRC>(buf, offset);
 
-                const auto computed = crc16(chunk.payload);
-                if (computed != chunk.checksum)
+                chunk.payload.assign(buf.begin() + HEADER_SIZE, buf.end());
+
+                if (crc16(chunk.payload) != chunk.checksum)
                         return result::err("checksum mismatch");
 
                 return result::ok(std::move(chunk));
