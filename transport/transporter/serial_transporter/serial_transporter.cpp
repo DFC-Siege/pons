@@ -2,21 +2,22 @@
 
 #include "result.hpp"
 #include "serial_transporter.hpp"
+#include "transporter/base_transporter.hpp"
 
 namespace transport {
 
 SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal)
-    : serial_hal(serial_hal) {
+    : BaseTransporter(), serial_hal(serial_hal) {
+        serial_hal.on_receive(
+            [this](DataView data) { this->handle_receive(data); });
 }
 
 result::Result<bool> SerialTransporter::send(DataView data) {
         return this->serial_hal.send(data);
 }
-result::Result<bool> add_receiver(ReceiveCallback callback);
-result::Result<bool> SerialTransporter::send(std::span<const uint8_t> data) {
-}
 
-result::Result<std::vector<uint8_t>> SerialTransporter::receive() {
-        return serial_hal.read(TIMEOUT);
+MTU SerialTransporter::get_mtu() const {
+        // TODO: Get from correct place
+        return 512;
 }
 } // namespace transport

@@ -1,0 +1,18 @@
+#pragma once
+
+#include "base_transporter.hpp"
+#include "result.hpp"
+
+namespace transport {
+void BaseTransporter::set_receiver(ReceiveCallback callback) {
+        this->callback = callback;
+}
+
+result::Result<bool> BaseTransporter::handle_receive(DataView data) {
+        if (!callback.has_value()) {
+                return result::err("callback not set");
+        }
+        callback.value()(data);
+        return result::ok();
+}
+} // namespace transport
