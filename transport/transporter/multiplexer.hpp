@@ -5,8 +5,10 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "base_transporter.hpp"
 #include "i_logger.hpp"
 #include "logger.hpp"
+#include "result.hpp"
 #include "transporter.hpp"
 
 namespace transport {
@@ -14,18 +16,9 @@ namespace transport {
 using TransporterId = uint8_t;
 using SendFn = std::function<result::Result<bool>(Data &&)>;
 
-template <Transporter T> class Multiplexer {
+template <Transporter T, Transporter U> class Multiplexer {
       public:
-        template <typename U>
-        explicit Multiplexer(
-            T &transporter,
-            std::unordered_map<TransporterId, std::reference_wrapper<U>> map)
-            : transporter(transporter) {
-                for (auto &[id, ref] : map) {
-                        send_fns.emplace(id, [&r = ref.get()](Data &&d) {
-                                return r.send(std::move(d));
-                        });
-                }
+        explicit Multiplexer(T &transporter) : transporter(transporter) {
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
@@ -37,8 +30,10 @@ template <Transporter T> class Multiplexer {
                 });
         }
 
-        class Channel {
+        class Channel : public BaseTransporter {
               public:
+                const TransporterId id;
+
                 Channel(Multiplexer &parent, TransporterId id)
                     : parent(parent), id(id) {
                 }
@@ -47,41 +42,32 @@ template <Transporter T> class Multiplexer {
                         return parent.send_with_id(id, std::move(data));
                 }
 
-                void set_receiver(ReceiveCallback callback) {
-                        parent.set_channel_receiver(id, std::move(callback));
-                }
-
                 MTU get_mtu() const {
                         const auto mtu = parent.transporter.get_mtu();
-                        assert(mtu > 0 && "attempted to use mtu <= 0");
-                        return mtu - 1;
+                        assert(mtu >= sizeof(TransporterId) &&
+                               "attempted to use mtu <= 0");
+                        return mtu - sizeof(TransporterId);
+                }
+
+                void receive(result::Result<Data> data) {
+                        const auto result = try_callback(data);
+                        if (result.failed()) {
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    result.error());
+                        }
                 }
 
               private:
+                static constexpr auto TAG = "Channel";
                 Multiplexer &parent;
-                TransporterId id;
         };
 
-        void set_channel_receiver(TransporterId id, ReceiveCallback callback) {
+        Channel &create_channel(TransporterId id) {
                 const std::scoped_lock lock(mutex);
-                channel_receivers[id] = std::move(callback);
-        }
-
-        result::Result<bool> send_with_id(TransporterId id, Data &&data) {
-                const std::scoped_lock lock(mutex);
-                auto it = send_fns.find(id);
-                if (it == send_fns.end()) {
-                        return result::err("transporter not registered");
-                }
-                data.insert(data.begin(), id);
-                return it->second(std::move(data));
-        }
-
-        result::Result<Channel> get_channel(TransporterId id) {
-                if (!send_fns.contains(id)) {
-                        return result::err("transporter not registered");
-                }
-                return result::ok(Channel(*this, id));
+                auto [it, _] =
+                    channels.emplace(id, std::make_unique<Channel>(*this, id));
+                return *it->second;
         }
 
       private:
@@ -89,9 +75,18 @@ template <Transporter T> class Multiplexer {
         friend class Channel;
 
         T &transporter;
-        std::unordered_map<TransporterId, SendFn> send_fns;
-        std::unordered_map<TransporterId, ReceiveCallback> channel_receivers;
+        std::unordered_map<TransporterId, std::unique_ptr<Channel>> channels;
         std::mutex mutex;
+
+        result::Result<bool> send_with_id(TransporterId id, Data &&data) {
+                const std::scoped_lock lock(mutex);
+                auto it = channels.find(id);
+                if (it == channels.end()) {
+                        return result::err("channel not registered");
+                }
+                data.insert(data.begin(), id);
+                return transporter.send(std::move(data));
+        }
 
         void handle_receive(Data &&data) {
                 if (data.size() < sizeof(TransporterId)) {
@@ -106,13 +101,14 @@ template <Transporter T> class Multiplexer {
                 data.erase(data.begin(), data.begin() + sizeof(TransporterId));
 
                 const std::scoped_lock lock(mutex);
-                if (auto it = channel_receivers.find(id);
-                    it != channel_receivers.end()) {
-                        it->second(result::ok(std::move(data)));
+                auto it = channels.find(id);
+                if (it == channels.end()) {
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "channel not found");
                         return;
                 }
-                logging::logger().println(logging::LogLevel::Error, TAG,
-                                          "transporter not found");
+
+                it->second->receive(result::ok(std::move(data)));
         }
 };
 
