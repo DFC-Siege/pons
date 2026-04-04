@@ -77,10 +77,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         std::mutex ingress_mutex;
 
         result::Result<SessionId> generate_session_id(
-            const std::unordered_map<SessionId, std::vector<Chunk>> chunks,
+            const std::unordered_map<SessionId, std::vector<Chunk>> &chunks,
             const SessionId next_session_id) const {
-                if (egress_map.size() >=
-                    std::numeric_limits<SessionId>::max()) {
+                if (chunks.size() >= std::numeric_limits<SessionId>::max()) {
                         return result::err(
                             "transport: maximum concurrent sessions reached");
                 }
@@ -88,7 +87,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 SessionId candidate = next_session_id;
                 const SessionId start_search = candidate;
 
-                while (egress_map.find(candidate) != egress_map.end()) {
+                while (chunks.find(candidate) != chunks.end()) {
                         candidate++;
 
                         if (candidate == start_search) {
@@ -182,9 +181,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
-                return [this, &last_chunk]() {
-                        send_ack(last_chunk.session_id, last_chunk.index + 1);
-                };
+                const auto sid = last_chunk.session_id;
+                const auto next_index = last_chunk.index + 1;
+                return [this, sid, next_index]() { send_ack(sid, next_index); };
         }
 
         std::function<void()> handle_nack(Data &&data) {
@@ -213,9 +212,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto &last_chunk = chunks.back();
-                return [this, &last_chunk]() {
-                        send_nack(last_chunk.session_id, last_chunk.index);
-                };
+                const auto sid = last_chunk.session_id;
+                const auto index = last_chunk.index;
+                return [this, sid, index]() { send_nack(sid, index); };
         }
 
         // TODO: Add max tries logic
@@ -230,7 +229,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto chunk = chunk_result.value();
-                const auto next_index = get_last_index() + 1;
+                const auto next_index = get_last_index(chunk.session_id) + 1;
                 if (chunk.index != next_index) {
                         defered_function = [this, sid = chunk.session_id,
                                             next_index]() {
@@ -261,15 +260,19 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         };
                         return defered_function;
                 }
-                chunks[chunk.index] = std::move(chunk);
 
-                defered_function = [this, sid = chunk.session_id,
-                                    next_index]() {
+                const auto sid = chunk.session_id;
+                const auto total_chunks = chunk.total_chunks;
+                const auto chunk_index = chunk.index;
+                chunks[chunk_index] = std::move(chunk);
+
+                defered_function = [this, sid, next_index]() {
                         this->send_ack(sid, next_index);
                 };
 
-                if (chunk.index == chunk.total_chunks - 1) {
-                        return handle_done_receiving(result::ok(chunks));
+                if (chunk_index == total_chunks - 1) {
+                        return handle_done_receiving(
+                            result::ok(std::move(chunks)), sid, total_chunks);
                 }
                 return defered_function;
         }
@@ -305,9 +308,10 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
                 ingress_map.erase(session_id);
-                return [this, &result]() {
+                return [this, assemble_result =
+                                  std::move(assemble_result)]() mutable {
                         const auto callback_result =
-                            try_callback(std::move(result));
+                            try_callback(std::move(assemble_result));
                         if (callback_result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
