@@ -34,7 +34,7 @@ result::Result<bool> SerialHal::loop() {
                 buffer.push_back(static_cast<uint8_t>(c));
         }
         if (!buffer.empty() && receive_callback) {
-                receive_callback(buffer);
+                receive_callback(std::move(buffer));
                 buffer.clear();
         }
         return result::ok();

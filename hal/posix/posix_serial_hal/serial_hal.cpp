@@ -50,7 +50,7 @@ result::Result<bool> SerialHal::loop() {
                 return result::ok();
         data.resize(length);
         if (receive_callback)
-                receive_callback(data);
+                receive_callback(std::move(data));
         return result::ok();
 }
 } // namespace serial

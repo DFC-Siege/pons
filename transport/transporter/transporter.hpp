@@ -5,8 +5,8 @@
 #include <functional>
 #include <vector>
 
-#include "data.hpp"
 #include "result.hpp"
+#include "transport_data.hpp"
 
 namespace transport {
 using ReceiveCallback = std::function<void(result::Result<Data>)>;

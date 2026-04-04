@@ -4,9 +4,10 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "data.hpp"
+#include "logger.hpp"
 #include "result.hpp"
-#include "transporter/transporter.hpp"
+#include "transport_data.hpp"
+#include "transporter.hpp"
 
 namespace transport {
 using CommandId = uint16_t;
@@ -31,7 +32,9 @@ template <Transporter T> class Dispatcher {
         Dispatcher(T &transporter) : transporter(transporter) {
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
-                                // TODO: Add log
+                                logging::logger().println(
+                                    logging::LogLevel::error, TAG,
+                                    result.error());
                                 return;
                         }
 
@@ -56,6 +59,7 @@ template <Transporter T> class Dispatcher {
         }
 
       private:
+        static constexpr auto TAG = "Dispatcher";
         std::unordered_map<CommandId, Handler> handlers;
         T &transporter;
         std::mutex mutex;
@@ -73,7 +77,8 @@ template <Transporter T> class Dispatcher {
                 const auto unwrap_result =
                     WrappedData::unwrap_data(std::move(data));
                 if (unwrap_result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::error, TAG,
+                                                  unwrap_result.error());
                         return;
                 }
 
@@ -83,7 +88,9 @@ template <Transporter T> class Dispatcher {
                         std::lock_guard<std::mutex> lock(mutex);
                         auto it = handlers.find(wrapped_data.command_id);
                         if (it == handlers.end()) {
-                                // TODO: Add log
+                                logging::logger().println(
+                                    logging::LogLevel::error, TAG,
+                                    "no handler found");
                                 return;
                         }
                         target_handler = it->second;

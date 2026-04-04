@@ -1,5 +1,6 @@
 #pragma once
 
+#include "base_transporter.hpp"
 #include "i_serial_hal.hpp"
 #include "result.hpp"
 #include "transporter/base_transporter.hpp"

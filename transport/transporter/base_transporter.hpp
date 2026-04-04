@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "result.hpp"
+#include "transport_data.hpp"
 #include "transporter.hpp"
 
 namespace transport {

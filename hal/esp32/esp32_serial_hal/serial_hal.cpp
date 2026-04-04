@@ -57,7 +57,7 @@ result::Result<bool> SerialHal::loop() {
         data.resize(length);
 
         if (receive_callback) {
-                receive_callback(data);
+                receive_callback(std::move(data));
         }
         return result::ok();
 }
