@@ -163,6 +163,41 @@ struct Chunk : public Packet {
                 return buf;
         }
 
+        static result::Result<Data> assemble(const std::vector<Chunk> &chunks,
+                                             const SessionId session_id,
+                                             const Indexer total_chunks) {
+                if (chunks.empty()) {
+                        return result::err("chunks empty");
+                }
+
+                if (chunks.size() != total_chunks) {
+                        return result::err("missing chunks");
+                }
+
+                size_t total_payload_size = 0;
+                for (const auto &chunk : chunks) {
+                        if (chunk.session_id != session_id) {
+                                return result::err("session id mismatch");
+                        }
+                        total_payload_size += chunk.payload.size();
+                }
+
+                Data data;
+                data.reserve(total_payload_size);
+
+                Indexer last_index = 0;
+                for (const auto &chunk : chunks) {
+                        if (chunk.index != last_index++) {
+                                return result::err("chunk out of order");
+                        }
+
+                        data.insert(data.end(), chunk.payload.begin(),
+                                    chunk.payload.end());
+                }
+
+                return result::ok(std::move(data));
+        }
+
         static result::Result<std::vector<Chunk>>
         fragment(Data &&data, SessionId session_id, MTU raw_mtu) {
                 if (data.empty())
@@ -192,6 +227,9 @@ struct Chunk : public Packet {
                                                  current_payload_size);
                         chunk.checksum = crc16(chunk.payload);
 
+                        assert(i < total_chunks &&
+                               "index is bigger than total_chunks");
+
                         chunks.push_back(std::move(chunk));
                 }
 
@@ -215,8 +253,13 @@ struct Chunk : public Packet {
                 chunk.checksum = detail::pull_le<CRC>(buf, offset);
                 chunk.payload.assign(buf.begin() + HEADER_SIZE, buf.end());
 
-                if (crc16(chunk.payload) != chunk.checksum)
+                if (crc16(chunk.payload) != chunk.checksum) {
                         return result::err("checksum mismatch");
+                }
+
+                if (chunk.index >= chunk.total_chunks) {
+                        return result::err("index is >= as total_chunks");
+                }
 
                 return result::ok(std::move(chunk));
         }
