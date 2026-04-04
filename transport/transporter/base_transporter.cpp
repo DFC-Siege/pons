@@ -1,5 +1,3 @@
-#pragma once
-
 #include "base_transporter.hpp"
 #include "result.hpp"
 
@@ -13,7 +11,7 @@ BaseTransporter::try_callback(result::Result<Data> data) {
         if (!callback.has_value()) {
                 return result::err("callback not set");
         }
-        callback.value()(data);
+        callback.value()(std::move(data));
         return result::ok();
 }
 } // namespace transport

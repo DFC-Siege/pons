@@ -231,50 +231,52 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 const auto chunk = chunk_result.value();
                 const auto expected_index = get_next_index(chunk.session_id);
                 if (chunk.index != expected_index) {
-                        defered_function = [this, sid = chunk.session_id,
-                                            expected_index]() {
-                                this->send_nack(sid, expected_index);
-                        };
-                        return defered_function;
-                }
-
-                const auto it = ingress_map.find(chunk.session_id);
-                if (it == ingress_map.end()) {
-                        std::vector<Chunk> chunks;
-                        chunks.resize(chunk.total_chunks);
-                        const auto idx = chunk.index;
-                        chunks[idx] = std::move(chunk);
-                        ingress_map[chunk.session_id] = std::move(chunks);
-                        defered_function = [this, sid = chunk.session_id,
-                                            expected_index]() {
-                                this->send_ack(sid, expected_index);
-                        };
-                        return defered_function;
-                }
-
-                auto &chunks = it->second;
-                if (chunk.index >= chunks.size()) {
-                        defered_function = [this, sid = chunk.session_id,
-                                            expected_index]() {
-                                this->send_nack(sid, expected_index);
-                        };
-                        return defered_function;
+                        return
+                            [this, sid = chunk.session_id, expected_index]() {
+                                    this->send_nack(sid, expected_index);
+                            };
                 }
 
                 const auto sid = chunk.session_id;
                 const auto total_chunks = chunk.total_chunks;
                 const auto chunk_index = chunk.index;
-                chunks[chunk_index] = std::move(chunk);
 
-                defered_function = [this, sid, expected_index]() {
-                        this->send_ack(sid, expected_index);
-                };
+                const auto it = ingress_map.find(sid);
+                if (it == ingress_map.end()) {
+                        std::vector<Chunk> chunks;
+                        chunks.resize(total_chunks);
+                        chunks[chunk_index] = std::move(chunk);
+                        ingress_map[sid] = std::move(chunks);
+
+                        if (chunk_index == total_chunks - 1) {
+                                return handle_done_receiving(
+                                    result::ok(std::move(ingress_map[sid])),
+                                    sid, total_chunks, chunk_index);
+                        }
+
+                        return [this, sid, expected_index]() {
+                                this->send_ack(sid, expected_index);
+                        };
+                }
+
+                auto &chunks = it->second;
+                if (chunk_index >= chunks.size()) {
+                        return [this, sid, expected_index]() {
+                                this->send_nack(sid, expected_index);
+                        };
+                }
+
+                chunks[chunk_index] = std::move(chunk);
 
                 if (chunk_index == total_chunks - 1) {
                         return handle_done_receiving(
-                            result::ok(std::move(chunks)), sid, total_chunks);
+                            result::ok(std::move(chunks)), sid, total_chunks,
+                            chunk_index);
                 }
-                return defered_function;
+
+                return [this, sid, expected_index]() {
+                        this->send_ack(sid, expected_index);
+                };
         }
 
         Indexer get_next_index(SessionId id) const {
@@ -305,7 +307,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         std::function<void()>
         handle_done_receiving(result::Result<std::vector<Chunk>> result,
                               const SessionId session_id,
-                              const Indexer total_chunks) {
+                              const Indexer total_chunks,
+                              const Indexer last_index) {
                 std::function<void()> defered_function = []() {};
                 if (result.failed()) {
                         try_callback(result::err(result.error()));
@@ -315,16 +318,18 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
                 ingress_map.erase(session_id);
-                return [this, assemble_result =
-                                  std::move(assemble_result)]() mutable {
-                        const auto callback_result =
-                            try_callback(std::move(assemble_result));
-                        if (callback_result.failed()) {
-                                logging::logger().println(
-                                    logging::LogLevel::Error, TAG,
-                                    callback_result.error());
-                        }
-                };
+                return
+                    [this, session_id, last_index,
+                     assemble_result = std::move(assemble_result)]() mutable {
+                            send_ack(session_id, last_index);
+                            const auto callback_result =
+                                try_callback(std::move(assemble_result));
+                            if (callback_result.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        callback_result.error());
+                            }
+                    };
         }
 };
 } // namespace transport
