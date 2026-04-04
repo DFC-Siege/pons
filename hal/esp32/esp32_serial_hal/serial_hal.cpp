@@ -23,7 +23,7 @@ SerialHal::SerialHal() {
                      UART_PIN_NO_CHANGE);
 }
 
-result::Result<bool> SerialHal::send(std::span<const uint8_t> data) {
+result::Result<bool> SerialHal::send(Data &&data) {
         if (data.empty()) {
                 return result::ok();
         }
@@ -43,7 +43,7 @@ void SerialHal::on_receive(ReceiveCallback cb) {
 }
 
 result::Result<bool> SerialHal::loop() {
-        std::vector<uint8_t> data(BUF_SIZE);
+        Data data(BUF_SIZE);
         int length = uart_read_bytes(UART_NUM_1, data.data(), BUF_SIZE, 0);
         if (length < 0) {
                 return result::err(

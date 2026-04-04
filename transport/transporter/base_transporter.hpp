@@ -11,12 +11,12 @@
 namespace transport {
 class BaseTransporter {
       public:
-        virtual result::Result<bool> send(DataView data) = 0;
+        virtual result::Result<bool> send(Data &&data) = 0;
         void set_receiver(ReceiveCallback callback);
         virtual MTU get_mtu() const = 0;
 
       protected:
-        result::Result<bool> handle_receive(DataView data);
+        result::Result<bool> handle_receive(Data &&data);
 
       private:
         std::optional<ReceiveCallback> callback;

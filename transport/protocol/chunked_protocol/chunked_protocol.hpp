@@ -6,9 +6,9 @@
 namespace transport {
 class ChunkedProtocol : public BaseProtocol {
       public:
-        result::Result<DataView> send(DataView data) override;
+        result::Result<Data> send(Data data) override;
 
       protected:
-        result::Result<DataView> handle_data(DataView data) override;
+        result::Result<Data> handle_data(Data data) override;
 };
 } // namespace transport

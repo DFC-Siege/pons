@@ -5,7 +5,7 @@ void BaseProtocol::set_receiver(ReceiveCallback callback) {
         this->callback = callback;
 }
 
-result::Result<bool> BaseProtocol::handle_receive(DataView data) {
+result::Result<bool> BaseProtocol::handle_receive(Data data) {
         if (!callback.has_value()) {
                 return result::err("callback not set");
         }

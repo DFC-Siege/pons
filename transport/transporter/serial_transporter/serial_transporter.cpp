@@ -9,11 +9,11 @@ namespace transport {
 SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal)
     : BaseTransporter(), serial_hal(serial_hal) {
         serial_hal.on_receive(
-            [this](DataView data) { this->handle_receive(data); });
+            [this](Data data) { this->handle_receive(std::move(data)); });
 }
 
-result::Result<bool> SerialTransporter::send(DataView data) {
-        return this->serial_hal.send(data);
+result::Result<bool> SerialTransporter::send(Data &&data) {
+        return this->serial_hal.send(std::move(data));
 }
 
 MTU SerialTransporter::get_mtu() const {
