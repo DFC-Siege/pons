@@ -22,7 +22,7 @@ template <Transporter T> class Multiplexer {
             std::unordered_map<TransporterId, std::reference_wrapper<U>> map)
             : transporter(transporter) {
                 for (auto &[id, ref] : map) {
-                        transporters.emplace(id, [&r = ref.get()](Data &&d) {
+                        send_fns.emplace(id, [&r = ref.get()](Data &&d) {
                                 return r.send(std::move(d));
                         });
                 }
@@ -62,20 +62,23 @@ template <Transporter T> class Multiplexer {
                 TransporterId id;
         };
 
+        void set_channel_receiver(TransporterId id, ReceiveCallback callback) {
+                const std::scoped_lock lock(mutex);
+                channel_receivers[id] = std::move(callback);
+        }
+
         result::Result<bool> send_with_id(TransporterId id, Data &&data) {
                 const std::scoped_lock lock(mutex);
-                if (!transporters.contains(id)) {
+                auto it = send_fns.find(id);
+                if (it == send_fns.end()) {
                         return result::err("transporter not registered");
                 }
-                auto wrap_result = wrap_data(id, std::move(data));
-                if (wrap_result.failed()) {
-                        return result::err(wrap_result.error());
-                }
-                return transporter.send(std::move(wrap_result).value());
+                data.insert(data.begin(), id);
+                return it->second(std::move(data));
         }
 
         result::Result<Channel> get_channel(TransporterId id) {
-                if (!transporters.contains(id)) {
+                if (!send_fns.contains(id)) {
                         return result::err("transporter not registered");
                 }
                 return result::ok(Channel(*this, id));
@@ -86,19 +89,9 @@ template <Transporter T> class Multiplexer {
         friend class Channel;
 
         T &transporter;
-        std::unordered_map<TransporterId, SendFn> transporters;
+        std::unordered_map<TransporterId, SendFn> send_fns;
         std::unordered_map<TransporterId, ReceiveCallback> channel_receivers;
         std::mutex mutex;
-
-        static result::Result<Data> wrap_data(TransporterId id, Data &&data) {
-                data.insert(data.begin(), id);
-                return result::ok(std::move(data));
-        }
-
-        void set_channel_receiver(TransporterId id, ReceiveCallback callback) {
-                const std::scoped_lock lock(mutex);
-                channel_receivers[id] = std::move(callback);
-        }
 
         void handle_receive(Data &&data) {
                 if (data.size() < sizeof(TransporterId)) {
@@ -118,12 +111,8 @@ template <Transporter T> class Multiplexer {
                         it->second(result::ok(std::move(data)));
                         return;
                 }
-                if (auto it = transporters.find(id); it != transporters.end()) {
-                        it->second(std::move(data));
-                } else {
-                        logging::logger().println(logging::LogLevel::Error, TAG,
-                                                  "transporter not found");
-                }
+                logging::logger().println(logging::LogLevel::Error, TAG,
+                                          "transporter not found");
         }
 };
 

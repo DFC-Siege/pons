@@ -29,13 +29,20 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         };
 
         result::Result<bool> send(Data &&data) override {
+                logging::logger().println(logging::LogLevel::Debug, TAG,
+                                          "send called, payload size: " +
+                                              std::to_string(data.size()));
                 Data packet;
                 {
                         std::scoped_lock lock(egress_mutex);
 
-                        const auto result = Chunk::fragment(
-                            std::move(data), transporter.get_mtu());
+                        const auto result =
+                            Chunk::fragment(data, transporter.get_mtu());
                         if (result.failed()) {
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    "fragment failed: " +
+                                        std::string(result.error()));
                                 return result::err(result.error());
                         }
 
@@ -44,17 +51,28 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                                 return result::err("chunks is empty");
                         }
 
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "fragmented into " + std::to_string(chunks.size()) +
+                                " chunks");
+
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
                         if (session_result.failed()) {
                                 return result::err(session_result.error());
                         }
                         next_session_id = session_result.value();
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "session id: " + std::to_string(next_session_id));
                         egress_map[next_session_id] = std::move(chunks);
 
                         packet = egress_map[next_session_id].at(0).to_buf();
                 }
 
+                logging::logger().println(logging::LogLevel::Debug, TAG,
+                                          "sending first chunk, size: " +
+                                              std::to_string(packet.size()));
                 return transporter.send(std::move(packet));
         }
 
@@ -62,7 +80,6 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 const auto mtu = transporter.get_mtu();
                 assert(mtu > Chunk::HEADER_SIZE &&
                        "mtu too small for chunking");
-
                 return mtu - Chunk::HEADER_SIZE;
         }
 
@@ -89,7 +106,6 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 while (chunks.find(candidate) != chunks.end()) {
                         candidate++;
-
                         if (candidate == start_search) {
                                 return result::err(
                                     "no available session slots");
@@ -100,6 +116,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         }
 
         void handle_data(Data &&data) {
+                logging::logger().println(logging::LogLevel::Debug, TAG,
+                                          "received data, size: " +
+                                              std::to_string(data.size()));
                 const auto type_result = get_packet_type(data);
                 if (type_result.failed()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -112,12 +131,21 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         std::scoped_lock lock(ingress_mutex);
                         switch (type_result.value()) {
                         case PacketType::ack:
+                                logging::logger().println(
+                                    logging::LogLevel::Debug, TAG,
+                                    "received ack");
                                 defer = handle_ack(std::move(data));
                                 break;
                         case PacketType::nack:
+                                logging::logger().println(
+                                    logging::LogLevel::Debug, TAG,
+                                    "received nack");
                                 defer = handle_nack(std::move(data));
                                 break;
                         case PacketType::chunk:
+                                logging::logger().println(
+                                    logging::LogLevel::Debug, TAG,
+                                    "received chunk");
                                 defer = handle_chunk(std::move(data));
                                 break;
                         }
@@ -129,6 +157,10 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         }
 
         void send_nack(SessionId session_id, Indexer index) {
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "sending nack, session: " + std::to_string(session_id) +
+                        " index: " + std::to_string(index));
                 Nack nack;
                 nack.session_id = session_id;
                 nack.index = index;
@@ -140,6 +172,10 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         }
 
         void send_ack(SessionId session_id, Indexer index) {
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "sending ack, session: " + std::to_string(session_id) +
+                        " index: " + std::to_string(index));
                 Ack ack;
                 ack.session_id = session_id;
                 ack.index = index;
@@ -161,6 +197,11 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto ack = result.value();
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "handling ack, session: " + std::to_string(ack.session_id) +
+                        " index: " + std::to_string(ack.index));
+
                 const auto it = egress_map.find(ack.session_id);
                 if (it == egress_map.end()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -177,12 +218,18 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 const auto &last_chunk = chunks.back();
                 if (last_chunk.index == last_chunk.total_chunks) {
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "all chunks acked, done sending");
                         handle_done_sending(last_chunk.session_id);
                         return defered_function;
                 }
 
                 const auto sid = last_chunk.session_id;
                 const auto next_index = last_chunk.index + 1;
+                logging::logger().println(logging::LogLevel::Debug, TAG,
+                                          "sending next chunk, index: " +
+                                              std::to_string(next_index));
                 return [this, sid, next_index]() { send_ack(sid, next_index); };
         }
 
@@ -197,6 +244,12 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto nack = result.value();
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "handling nack, session: " +
+                        std::to_string(nack.session_id) +
+                        " index: " + std::to_string(nack.index));
+
                 const auto it = egress_map.find(nack.session_id);
                 if (it == egress_map.end()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -217,7 +270,6 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 return [this, sid, index]() { send_nack(sid, index); };
         }
 
-        // TODO: Add max tries logic
         std::function<void()> handle_chunk(Data &&data) {
                 std::function<void()> defered_function = []() {};
 
@@ -229,8 +281,22 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto chunk = chunk_result.value();
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "handling chunk, session: " +
+                        std::to_string(chunk.session_id) +
+                        " index: " + std::to_string(chunk.index) + "/" +
+                        std::to_string(chunk.total_chunks - 1) +
+                        " payload size: " +
+                        std::to_string(chunk.payload.size()));
+
                 const auto expected_index = get_next_index(chunk.session_id);
                 if (chunk.index != expected_index) {
+                        logging::logger().println(
+                            logging::LogLevel::Error, TAG,
+                            "unexpected chunk index, expected: " +
+                                std::to_string(expected_index) +
+                                " got: " + std::to_string(chunk.index));
                         return
                             [this, sid = chunk.session_id, expected_index]() {
                                     this->send_nack(sid, expected_index);
@@ -249,6 +315,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         ingress_map[sid] = std::move(chunks);
 
                         if (chunk_index == total_chunks - 1) {
+                                logging::logger().println(
+                                    logging::LogLevel::Debug, TAG,
+                                    "last chunk received, assembling");
                                 return handle_done_receiving(
                                     result::ok(std::move(ingress_map[sid])),
                                     sid, total_chunks, chunk_index);
@@ -261,6 +330,10 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 auto &chunks = it->second;
                 if (chunk_index >= chunks.size()) {
+                        logging::logger().println(
+                            logging::LogLevel::Error, TAG,
+                            "chunk index out of bounds: " +
+                                std::to_string(chunk_index));
                         return [this, sid, expected_index]() {
                                 this->send_nack(sid, expected_index);
                         };
@@ -269,6 +342,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 chunks[chunk_index] = std::move(chunk);
 
                 if (chunk_index == total_chunks - 1) {
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "last chunk received, assembling");
                         return handle_done_receiving(
                             result::ok(std::move(chunks)), sid, total_chunks,
                             chunk_index);
@@ -301,6 +377,9 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         }
 
         void handle_done_sending(SessionId id) {
+                logging::logger().println(logging::LogLevel::Debug, TAG,
+                                          "done sending session: " +
+                                              std::to_string(id));
                 egress_map.erase(id);
         }
 
@@ -318,6 +397,19 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
                 ingress_map.erase(session_id);
+
+                if (assemble_result.failed()) {
+                        logging::logger().println(
+                            logging::LogLevel::Error, TAG,
+                            "assembly failed: " +
+                                std::string(assemble_result.error()));
+                } else {
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "assembly succeeded, payload size: " +
+                                std::to_string(assemble_result.value().size()));
+                }
+
                 return
                     [this, session_id, last_index,
                      assemble_result = std::move(assemble_result)]() mutable {

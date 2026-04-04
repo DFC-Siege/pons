@@ -171,7 +171,7 @@ struct Chunk : public Packet {
                 return result::ok(std::move(data));
         }
 
-        static result::Result<std::vector<Chunk>> fragment(Data &&data,
+        static result::Result<std::vector<Chunk>> fragment(const Data &data,
                                                            MTU raw_mtu) {
                 if (data.empty())
                         return result::err("empty data");
@@ -190,7 +190,6 @@ struct Chunk : public Packet {
                         const size_t offset = i * max_payload;
                         const size_t current_payload_size =
                             std::min(max_payload, total_size - offset);
-
                         Chunk chunk;
                         chunk.index = i;
                         chunk.total_chunks = total_chunks;
@@ -198,10 +197,6 @@ struct Chunk : public Packet {
                                              data.begin() + offset +
                                                  current_payload_size);
                         chunk.checksum = crc16(chunk.payload);
-
-                        assert(i < total_chunks &&
-                               "index is bigger than total_chunks");
-
                         chunks.push_back(std::move(chunk));
                 }
 
