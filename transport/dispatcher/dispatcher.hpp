@@ -33,7 +33,7 @@ template <Transporter T> class Dispatcher {
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
-                                    logging::LogLevel::error, TAG,
+                                    logging::LogLevel::Error, TAG,
                                     result.error());
                                 return;
                         }
@@ -77,7 +77,7 @@ template <Transporter T> class Dispatcher {
                 const auto unwrap_result =
                     WrappedData::unwrap_data(std::move(data));
                 if (unwrap_result.failed()) {
-                        logging::logger().println(logging::LogLevel::error, TAG,
+                        logging::logger().println(logging::LogLevel::Error, TAG,
                                                   unwrap_result.error());
                         return;
                 }
@@ -89,7 +89,7 @@ template <Transporter T> class Dispatcher {
                         auto it = handlers.find(wrapped_data.command_id);
                         if (it == handlers.end()) {
                                 logging::logger().println(
-                                    logging::LogLevel::error, TAG,
+                                    logging::LogLevel::Error, TAG,
                                     "no handler found");
                                 return;
                         }

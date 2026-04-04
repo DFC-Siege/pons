@@ -16,4 +16,10 @@ else()
                 DESTINATION include/pons
                 FILES_MATCHING PATTERN "*.hpp"
         )
+        if(PLATFORM STREQUAL "posix")
+                add_executable(dispatcher_test dispatcher_test.cpp)
+                target_link_libraries(dispatcher_test PRIVATE Catch2::Catch2WithMain dispatcher platform_async)
+                target_compile_features(dispatcher_test PRIVATE cxx_std_20)
+                catch_discover_tests(dispatcher_test)
+        endif()
 endif()
