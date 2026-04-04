@@ -4,12 +4,27 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "data.hpp"
+#include "result.hpp"
 #include "transporter/transporter.hpp"
 
 namespace transport {
 using CommandId = uint16_t;
-using SessionId = uint16_t;
 using Handler = std::function<void(result::Result<Data>)>;
+
+struct WrappedData {
+        CommandId command_id;
+        Data data;
+
+        static result::Result<WrappedData> unwrap_data(Data &&data) {
+                return result::err("not implemented");
+        }
+
+        static result::Result<Data> wrap_data(CommandId command_id,
+                                              Data &&data) {
+                return result::err("not implemented");
+        }
+};
 
 template <Transporter T> class Dispatcher {
       public:
@@ -24,6 +39,16 @@ template <Transporter T> class Dispatcher {
                 });
         }
 
+        result::Result<bool> send(CommandId command_id, Data &&data) {
+                const auto wrap_result =
+                    WrappedData::wrap_data(command_id, std::move(data));
+                if (wrap_result.failed()) {
+                        return result::err(wrap_result.error());
+                }
+
+                return transporter.send(std::move(wrap_result.value()));
+        }
+
         void register_handler(CommandId id, Handler &&handler) {
                 assert(handler && "attempted to register an empty handler");
                 std::lock_guard<std::mutex> lock(mutex);
@@ -35,8 +60,36 @@ template <Transporter T> class Dispatcher {
         T &transporter;
         std::mutex mutex;
 
+        result::Result<Handler> try_get_handler(CommandId id) {
+                auto it = handlers.find(id);
+                if (it == handlers.end()) {
+                        return result::err("couldn't find handler");
+                }
+
+                return result::ok(it->second);
+        }
+
         void handle_data(Data &&data) {
-                // TODO: Handle data
+                const auto unwrap_result =
+                    WrappedData::unwrap_data(std::move(data));
+                if (unwrap_result.failed()) {
+                        // TODO: Add log
+                        return;
+                }
+
+                auto wrapped_data = unwrap_result.value();
+                Handler target_handler;
+                {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        auto it = handlers.find(wrapped_data.command_id);
+                        if (it == handlers.end()) {
+                                // TODO: Add log
+                                return;
+                        }
+                        target_handler = it->second;
+                }
+
+                target_handler(result::ok(std::move(wrapped_data.data)));
         }
 };
 } // namespace transport

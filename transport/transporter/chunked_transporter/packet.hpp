@@ -4,14 +4,19 @@
 #include <span>
 #include <vector>
 
+#include "data.hpp"
 #include "result.hpp"
 
 namespace transport {
-static uint16_t crc16(std::span<const uint8_t> data) {
-        uint16_t crc = 0;
+using CRC = uint16_t;
+using SessionId = uint8_t;
+using Indexer = uint16_t;
+
+static CRC crc16(DataView data) {
+        CRC crc = 0;
         for (const auto byte : data) {
                 crc ^= byte;
-                for (int i = 0; i < 8; i++) {
+                for (int i = 0; i < sizeof(Unit) * 8; i++) {
                         crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
                 }
         }
@@ -27,52 +32,52 @@ enum class PacketType : uint8_t {
 
 struct Ack {
         static constexpr uint8_t SESSION_ID_OFFSET = 3;
-        uint16_t index;
-        uint8_t session_id;
+        Indexer index;
+        SessionId session_id;
 
-        std::vector<uint8_t> to_buf() const {
-                return {static_cast<uint8_t>(PacketType::ack),
-                        static_cast<uint8_t>(index & 0xFF),
-                        static_cast<uint8_t>((index >> 8) & 0xFF), session_id};
+        Data to_buf() const {
+                return {static_cast<Unit>(PacketType::ack),
+                        static_cast<Unit>(index & 0xFF),
+                        static_cast<Unit>((index >> 8) & 0xFF), session_id};
         }
 
-        static result::Result<Ack> from_buf(std::span<const uint8_t> buf) {
+        static result::Result<Ack> from_buf(DataView buf) {
                 if (buf.size() < 5)
                         return result::err("buffer too small");
                 if (static_cast<PacketType>(buf[0]) != PacketType::ack)
                         return result::err("invalid packet type");
                 return result::ok(
-                    Ack{static_cast<uint16_t>(buf[1] | (buf[2] << 8)), buf[3]});
+                    Ack{static_cast<Indexer>(buf[1] | (buf[2] << 8)), buf[3]});
         }
 };
 
 struct Nack {
         static constexpr uint8_t SESSION_ID_OFFSET = 3;
-        uint16_t index;
-        uint8_t session_id;
+        Indexer index;
+        SessionId session_id;
 
-        std::vector<uint8_t> to_buf() const {
-                return {static_cast<uint8_t>(PacketType::nack),
-                        static_cast<uint8_t>(index & 0xFF),
-                        static_cast<uint8_t>((index >> 8) & 0xFF), session_id};
+        Data to_buf() const {
+                return {static_cast<Unit>(PacketType::nack),
+                        static_cast<Unit>(index & 0xFF),
+                        static_cast<Unit>((index >> 8) & 0xFF), session_id};
         }
 
-        static result::Result<Nack> from_buf(std::span<const uint8_t> buf) {
+        static result::Result<Nack> from_buf(DataView buf) {
                 if (buf.size() < 5)
                         return result::err("buffer too small");
                 if (static_cast<PacketType>(buf[0]) != PacketType::nack)
                         return result::err("invalid packet type");
-                return result::ok(Nack{
-                    static_cast<uint16_t>(buf[1] | (buf[2] << 8)), buf[3]});
+                return result::ok(
+                    Nack{static_cast<Indexer>(buf[1] | (buf[2] << 8)), buf[3]});
         }
 };
 
 struct Chunk {
         static constexpr PacketType TYPE = PacketType::chunk;
-        std::vector<uint8_t> payload;
-        uint16_t index;
-        uint16_t total_chunks;
-        uint16_t checksum;
+        Data payload;
+        Indexer index;
+        Indexer total_chunks;
+        CRC checksum;
         static constexpr auto TYPE_SIZE = sizeof(TYPE);
         static constexpr auto INDEX_SIZE = sizeof(index);
         static constexpr auto COUNT_SIZE = sizeof(total_chunks);
