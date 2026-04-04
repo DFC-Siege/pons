@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <functional>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -82,16 +83,24 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         return;
                 }
 
-                switch (type_result.value()) {
-                case PacketType::ack:
-                        handle_ack(std::move(data));
-                        break;
-                case PacketType::nack:
-                        handle_nack(std::move(data));
-                        break;
-                case PacketType::chunk:
-                        handle_chunk(std::move(data));
-                        break;
+                std::function<void()> defer;
+                {
+                        std::scoped_lock lock(ingress_mutex);
+                        switch (type_result.value()) {
+                        case PacketType::ack:
+                                defer = handle_ack(std::move(data));
+                                break;
+                        case PacketType::nack:
+                                defer = handle_nack(std::move(data));
+                                break;
+                        case PacketType::chunk:
+                                defer = handle_chunk(std::move(data));
+                                break;
+                        }
+                }
+
+                if (defer) {
+                        defer();
                 }
         }
 
@@ -115,25 +124,30 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
         }
 
-        void handle_ack(Data &&data) {
+        std::function<void()> handle_ack(Data &&data) {
         }
 
-        void handle_nack(Data &&data) {
+        std::function<void()> handle_nack(Data &&data) {
         }
 
         // TODO: Add max tries logic
-        void handle_chunk(Data &&data) {
+        std::function<void()> handle_chunk(Data &&data) {
+                std::function<void()> defered_function = []() {};
+
                 const auto chunk_result = Chunk::from_buf(data);
                 if (chunk_result.failed()) {
                         // TODO: Add log
-                        return;
+                        return defered_function;
                 }
 
                 const auto chunk = chunk_result.value();
                 const auto next_index = get_last_index() + 1;
                 if (chunk.index != next_index) {
-                        send_nack(chunk.session_id, next_index);
-                        return;
+                        defered_function = [this, sid = chunk.session_id,
+                                            next_index]() {
+                                this->send_nack(sid, next_index);
+                        };
+                        return defered_function;
                 }
 
                 const auto it = received_chunks.find(chunk.session_id);
@@ -143,18 +157,28 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         const auto idx = chunk.index;
                         chunks[idx] = std::move(chunk);
                         received_chunks[chunk.session_id] = std::move(chunks);
-                        send_ack(chunk.session_id, next_index);
-                        return;
+                        defered_function = [this, sid = chunk.session_id,
+                                            next_index]() {
+                                this->send_ack(sid, next_index);
+                        };
+                        return defered_function;
                 }
 
                 auto &chunks = it->second;
                 if (chunk.index >= chunks.size()) {
-                        send_nack(chunk.session_id, next_index);
-                        return;
+                        defered_function = [this, sid = chunk.session_id,
+                                            next_index]() {
+                                this->send_nack(sid, next_index);
+                        };
+                        return defered_function;
                 }
                 chunks[chunk.index] = std::move(chunk);
 
-                send_ack(chunk.session_id, next_index);
+                defered_function = [this, sid = chunk.session_id,
+                                    next_index]() {
+                        this->send_ack(sid, next_index);
+                };
+                return defered_function;
         }
 
         Indexer get_last_index(SessionId id) const {
