@@ -18,12 +18,24 @@ struct WrappedData {
         Data data;
 
         static result::Result<WrappedData> unwrap_data(Data &&data) {
-                return result::err("not implemented");
+                if (data.size() < sizeof(CommandId)) {
+                        return result::err("data too small to unwrap");
+                }
+
+                const auto command_id = detail::pull_le<CommandId>(data, 0);
+                auto payload =
+                    Data(data.begin() + sizeof(CommandId), data.end());
+
+                return result::ok(WrappedData{command_id, std::move(payload)});
         }
 
         static result::Result<Data> wrap_data(CommandId command_id,
                                               Data &&data) {
-                return result::err("not implemented");
+                Data buf;
+                buf.reserve(sizeof(CommandId) + data.size());
+                detail::push_le(buf, command_id);
+                buf.insert(buf.end(), data.begin(), data.end());
+                return result::ok(std::move(buf));
         }
 };
 
@@ -38,18 +50,17 @@ template <Transporter T> class Dispatcher {
                                 return;
                         }
 
-                        handle_data(std::move(result.value()));
+                        handle_data(std::move(result).value());
                 });
         }
 
         result::Result<bool> send(CommandId command_id, Data &&data) {
-                const auto wrap_result =
+                auto wrap_result =
                     WrappedData::wrap_data(command_id, std::move(data));
                 if (wrap_result.failed()) {
                         return result::err(wrap_result.error());
                 }
-
-                return transporter.send(std::move(wrap_result.value()));
+                return transporter.send(std::move(wrap_result).value());
         }
 
         void register_handler(CommandId id, Handler &&handler) {
@@ -64,25 +75,14 @@ template <Transporter T> class Dispatcher {
         T &transporter;
         std::mutex mutex;
 
-        result::Result<Handler> try_get_handler(CommandId id) {
-                auto it = handlers.find(id);
-                if (it == handlers.end()) {
-                        return result::err("couldn't find handler");
-                }
-
-                return result::ok(it->second);
-        }
-
         void handle_data(Data &&data) {
-                const auto unwrap_result =
-                    WrappedData::unwrap_data(std::move(data));
+                auto unwrap_result = WrappedData::unwrap_data(std::move(data));
                 if (unwrap_result.failed()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   unwrap_result.error());
                         return;
                 }
-
-                auto wrapped_data = unwrap_result.value();
+                auto wrapped_data = std::move(unwrap_result).value();
                 Handler target_handler;
                 {
                         std::lock_guard<std::mutex> lock(mutex);
@@ -95,7 +95,6 @@ template <Transporter T> class Dispatcher {
                         }
                         target_handler = it->second;
                 }
-
                 target_handler(result::ok(std::move(wrapped_data.data)));
         }
 };
