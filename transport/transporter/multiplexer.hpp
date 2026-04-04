@@ -31,7 +31,7 @@ template <Transporter T> class Multiplexer {
 
                 MTU get_mtu() const {
                         const auto mtu = parent.transporter.get_mtu();
-                        assert(mtu > 0);
+                        assert(mtu > 0 && "attempted to use mtu <= 0");
 
                         return mtu - 1;
                 }
