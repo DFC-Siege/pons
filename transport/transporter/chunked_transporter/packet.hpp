@@ -43,7 +43,7 @@ using CRC = uint16_t;
 using SessionId = uint8_t;
 using Indexer = uint16_t;
 
-static CRC crc16(DataView data) {
+inline CRC crc16(DataView data) {
         CRC crc = 0;
         for (const auto unit : data) {
                 crc ^= unit;
@@ -60,7 +60,7 @@ enum class PacketType : uint8_t {
         nack = 0x02,
 };
 
-static result::Result<PacketType> get_packet_type(DataView data) {
+inline result::Result<PacketType> get_packet_type(DataView data) {
         if (data.empty()) {
                 return result::err("empty data");
         }
@@ -186,7 +186,7 @@ struct Chunk : public Packet {
                 data.reserve(total_payload_size);
 
                 Indexer last_index = 0;
-                for (const auto &chunk : chunks) {
+                for (auto &chunk : chunks) {
                         if (chunk.index != last_index++) {
                                 return result::err("chunk out of order");
                         }
@@ -200,8 +200,8 @@ struct Chunk : public Packet {
                 return result::ok(std::move(data));
         }
 
-        static result::Result<std::vector<Chunk>>
-        fragment(Data &&data, SessionId session_id, MTU raw_mtu) {
+        static result::Result<std::vector<Chunk>> fragment(Data &&data,
+                                                           MTU raw_mtu) {
                 if (data.empty())
                         return result::err("empty data");
                 if (raw_mtu <= HEADER_SIZE)
@@ -221,7 +221,6 @@ struct Chunk : public Packet {
                             std::min(max_payload, total_size - offset);
 
                         Chunk chunk;
-                        chunk.session_id = session_id;
                         chunk.index = i;
                         chunk.total_chunks = total_chunks;
                         chunk.payload.assign(data.begin() + offset,
@@ -260,7 +259,7 @@ struct Chunk : public Packet {
                 }
 
                 if (chunk.index >= chunk.total_chunks) {
-                        return result::err("index is >= as total_chunks");
+                        return result::err("index >= total_chunks");
                 }
 
                 return result::ok(std::move(chunk));
