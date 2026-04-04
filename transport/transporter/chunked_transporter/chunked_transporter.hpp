@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "i_logger.hpp"
+#include "logger.hpp"
 #include "packet.hpp"
 #include "transporter/base_transporter.hpp"
 #include "transporter/transporter.hpp"
@@ -15,12 +17,14 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
       public:
         ChunkedTransporter(T &transporter, uint16_t max_tries)
             : transporter(transporter), max_tries(max_tries) {
-                transporter.set_receiver([this](result::Result<Data> data) {
-                        if (data.failed()) {
-                                // TODO: Add log
+                transporter.set_receiver([this](result::Result<Data> result) {
+                        if (result.failed()) {
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    result.error());
                                 return;
                         }
-                        handle_data(std::move(data));
+                        handle_data(std::move(result.value()));
                 });
         };
 
@@ -63,6 +67,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         }
 
       private:
+        static constexpr auto TAG = "ChunkedTransporter";
         T &transporter;
         std::unordered_map<SessionId, std::vector<Chunk>> egress_map;
         std::unordered_map<SessionId, std::vector<Chunk>> ingress_map;
@@ -98,7 +103,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         void handle_data(Data &&data) {
                 const auto type_result = get_packet_type(data);
                 if (type_result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  type_result.error());
                         return;
                 }
 
@@ -129,7 +135,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 nack.index = index;
                 const auto result = transporter.send(nack.to_buf());
                 if (result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  result.error());
                 }
         }
 
@@ -139,7 +146,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 ack.index = index;
                 const auto result = transporter.send(ack.to_buf());
                 if (result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  result.error());
                 }
         }
 
@@ -148,20 +156,23 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 const auto result = Ack::from_buf(data);
                 if (result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  result.error());
                         return defered_function;
                 }
 
                 const auto ack = result.value();
                 const auto it = egress_map.find(ack.session_id);
                 if (it == egress_map.end()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "no egress session found");
                         return defered_function;
                 }
 
                 const auto &chunks = it->second;
                 if (chunks.empty()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "chunks are empty");
                         return defered_function;
                 }
 
@@ -181,20 +192,23 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 const auto result = Nack::from_buf(data);
                 if (result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  result.error());
                         return defered_function;
                 }
 
                 const auto nack = result.value();
                 const auto it = egress_map.find(nack.session_id);
                 if (it == egress_map.end()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "no egress session found");
                         return defered_function;
                 }
 
                 const auto &chunks = it->second;
                 if (chunks.empty()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "chunks are empty");
                         return defered_function;
                 }
 
@@ -210,7 +224,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 const auto chunk_result = Chunk::from_buf(data);
                 if (chunk_result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  chunk_result.error());
                         return defered_function;
                 }
 
@@ -289,11 +304,14 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
+                ingress_map.erase(session_id);
                 return [this, &result]() {
                         const auto callback_result =
                             try_callback(std::move(result));
                         if (callback_result.failed()) {
-                                // TODO: Add log
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    callback_result.error());
                         }
                 };
         }
