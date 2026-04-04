@@ -3,7 +3,6 @@
 #include <vector>
 
 #include "multiplexer.hpp"
-
 using namespace transport;
 struct MockTransporter {
         MTU mtu = 64;

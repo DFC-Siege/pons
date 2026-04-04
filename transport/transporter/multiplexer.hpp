@@ -1,20 +1,31 @@
 #pragma once
-#include "i_logger.hpp"
-#include "logger.hpp"
-#include "transporter/transporter.hpp"
+#include <cassert>
 #include <cstring>
 #include <functional>
 #include <mutex>
 #include <unordered_map>
+
+#include "i_logger.hpp"
+#include "logger.hpp"
+#include "transporter.hpp"
+
 namespace transport {
+
 using TransporterId = uint8_t;
+using SendFn = std::function<result::Result<bool>(Data &&)>;
+
 template <Transporter T> class Multiplexer {
       public:
+        template <typename U>
         explicit Multiplexer(
             T &transporter,
-            std::unordered_map<TransporterId, std::reference_wrapper<T>>
-                transporters)
-            : transporter(transporter), transporters(std::move(transporters)) {
+            std::unordered_map<TransporterId, std::reference_wrapper<U>> map)
+            : transporter(transporter) {
+                for (auto &[id, ref] : map) {
+                        transporters.emplace(id, [&r = ref.get()](Data &&d) {
+                                return r.send(std::move(d));
+                        });
+                }
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
@@ -22,7 +33,7 @@ template <Transporter T> class Multiplexer {
                                     result.error());
                                 return;
                         }
-                        this->handle_receive(std::move(result).value());
+                        handle_receive(std::move(result).value());
                 });
         }
 
@@ -31,9 +42,15 @@ template <Transporter T> class Multiplexer {
                 Channel(Multiplexer &parent, TransporterId id)
                     : parent(parent), id(id) {
                 }
+
                 result::Result<bool> send(Data &&data) {
-                        return parent.send_with_id(this->id, std::move(data));
+                        return parent.send_with_id(id, std::move(data));
                 }
+
+                void set_receiver(ReceiveCallback callback) {
+                        parent.set_channel_receiver(id, std::move(callback));
+                }
+
                 MTU get_mtu() const {
                         const auto mtu = parent.transporter.get_mtu();
                         assert(mtu > 0 && "attempted to use mtu <= 0");
@@ -47,12 +64,14 @@ template <Transporter T> class Multiplexer {
 
         result::Result<bool> send_with_id(TransporterId id, Data &&data) {
                 const std::scoped_lock lock(mutex);
-                const auto wrap_result = wrap_data(id, std::move(data));
+                if (!transporters.contains(id)) {
+                        return result::err("transporter not registered");
+                }
+                auto wrap_result = wrap_data(id, std::move(data));
                 if (wrap_result.failed()) {
                         return result::err(wrap_result.error());
                 }
-                auto wrapped_data = std::move(wrap_result).value();
-                return transporter.send(std::move(wrapped_data));
+                return transporter.send(std::move(wrap_result).value());
         }
 
         result::Result<Channel> get_channel(TransporterId id) {
@@ -65,46 +84,47 @@ template <Transporter T> class Multiplexer {
       private:
         static constexpr auto TAG = "Multiplexer";
         friend class Channel;
+
         T &transporter;
-        std::unordered_map<TransporterId, std::reference_wrapper<T>>
-            transporters;
+        std::unordered_map<TransporterId, SendFn> transporters;
+        std::unordered_map<TransporterId, ReceiveCallback> channel_receivers;
         std::mutex mutex;
 
-        result::Result<T &> try_get_transporter(TransporterId id) {
-                auto it = transporters.find(id);
-                if (it == transporters.end()) {
-                        return result::err("transporter not found");
-                }
-                return result::ok_ref(it->second.get());
-        }
-
-        result::Result<Data> wrap_data(TransporterId id, Data &&data) {
-                if (!transporters.contains(id)) {
-                        return result::err("transporter not found");
-                }
+        static result::Result<Data> wrap_data(TransporterId id, Data &&data) {
                 data.insert(data.begin(), id);
                 return result::ok(std::move(data));
         }
 
+        void set_channel_receiver(TransporterId id, ReceiveCallback callback) {
+                const std::scoped_lock lock(mutex);
+                channel_receivers[id] = std::move(callback);
+        }
+
         void handle_receive(Data &&data) {
-                const size_t n = sizeof(TransporterId);
-                if (data.size() < n) {
+                if (data.size() < sizeof(TransporterId)) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
                             "data is smaller than minimal size");
                         return;
                 }
+
                 TransporterId id;
                 std::memcpy(&id, data.data(), sizeof(TransporterId));
-                data.erase(data.begin(), data.begin() + n);
+                data.erase(data.begin(), data.begin() + sizeof(TransporterId));
 
-                const auto it = transporters.find(id);
-                if (it == transporters.end()) {
-                        logging::logger().println(logging::LogLevel::Error, TAG,
-                                                  "transporter not found");
+                const std::scoped_lock lock(mutex);
+                if (auto it = channel_receivers.find(id);
+                    it != channel_receivers.end()) {
+                        it->second(result::ok(std::move(data)));
                         return;
                 }
-                it->second.get().send(std::move(data));
+                if (auto it = transporters.find(id); it != transporters.end()) {
+                        it->second(std::move(data));
+                } else {
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  "transporter not found");
+                }
         }
 };
+
 } // namespace transport
