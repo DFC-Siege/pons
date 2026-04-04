@@ -26,6 +26,11 @@ template <typename T> class Result {
                 return val.value();
         }
 
+        T &&value() && {
+                assert(!fail && "called value() on a failed result");
+                return std::move(val.value());
+        }
+
       private:
         bool fail;
         std::string_view err;

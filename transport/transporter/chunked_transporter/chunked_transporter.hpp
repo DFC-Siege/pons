@@ -254,7 +254,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 };
 
                 if (chunk.index == chunk.total_chunks - 1) {
-                        handle_done_receiving(result::ok(chunks));
+                        return handle_done_receiving(result::ok(chunks));
                 }
                 return defered_function;
         }
@@ -277,11 +277,25 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 egress_map.erase(id);
         }
 
-        void handle_done_receiving(result::Result<Chunk> result) {
-                const auto callback_result = try_callback(std::move(result));
-                if (callback_result.failed()) {
-                        // TODO: Add log
+        std::function<void()>
+        handle_done_receiving(result::Result<std::vector<Chunk>> result,
+                              const SessionId session_id,
+                              const Indexer total_chunks) {
+                std::function<void()> defered_function = []() {};
+                if (result.failed()) {
+                        try_callback(result::err(result.error()));
+                        return defered_function;
                 }
+
+                auto assemble_result = Chunk::assemble(
+                    std::move(result).value(), session_id, total_chunks);
+                return [this, &result]() {
+                        const auto callback_result =
+                            try_callback(std::move(result));
+                        if (callback_result.failed()) {
+                                // TODO: Add log
+                        }
+                };
         }
 };
 } // namespace transport

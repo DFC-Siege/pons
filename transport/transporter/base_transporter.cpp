@@ -8,11 +8,12 @@ void BaseTransporter::set_receiver(ReceiveCallback callback) {
         this->callback = callback;
 }
 
-[[nodiscard]] result::Result<bool> BaseTransporter::try_callback(Data &&data) {
+[[nodiscard]] result::Result<bool>
+BaseTransporter::try_callback(result::Result<Data> data) {
         if (!callback.has_value()) {
                 return result::err("callback not set");
         }
-        callback.value()(result::ok(std::move(data)));
+        callback.value()(data);
         return result::ok();
 }
 } // namespace transport

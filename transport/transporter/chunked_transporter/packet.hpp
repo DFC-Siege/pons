@@ -163,7 +163,7 @@ struct Chunk : public Packet {
                 return buf;
         }
 
-        static result::Result<Data> assemble(const std::vector<Chunk> &chunks,
+        static result::Result<Data> assemble(std::vector<Chunk> &&chunks,
                                              const SessionId session_id,
                                              const Indexer total_chunks) {
                 if (chunks.empty()) {
@@ -191,8 +191,10 @@ struct Chunk : public Packet {
                                 return result::err("chunk out of order");
                         }
 
-                        data.insert(data.end(), chunk.payload.begin(),
-                                    chunk.payload.end());
+                        data.insert(
+                            data.end(),
+                            std::make_move_iterator(chunk.payload.begin()),
+                            std::make_move_iterator(chunk.payload.end()));
                 }
 
                 return result::ok(std::move(data));
