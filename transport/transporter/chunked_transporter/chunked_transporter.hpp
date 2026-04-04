@@ -40,16 +40,15 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                                 return result::err("chunks is empty");
                         }
 
-                        const auto session_result = generate_session_id(
-                            egress_map, next_egress_session_id);
+                        const auto session_result =
+                            generate_session_id(egress_map, next_session_id);
                         if (session_result.failed()) {
                                 return result::err(session_result.error());
                         }
-                        next_egress_session_id = session_result.value();
-                        egress_map[next_egress_session_id] = std::move(chunks);
+                        next_session_id = session_result.value();
+                        egress_map[next_session_id] = std::move(chunks);
 
-                        packet =
-                            egress_map[next_egress_session_id].at(0).to_buf();
+                        packet = egress_map[next_session_id].at(0).to_buf();
                 }
 
                 return transporter.send(std::move(packet));
@@ -68,8 +67,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         std::unordered_map<SessionId, std::vector<Chunk>> egress_map;
         std::unordered_map<SessionId, std::vector<Chunk>> ingress_map;
         uint16_t max_tries = 0;
-        SessionId next_egress_session_id = 0;
-        SessionId next_ingress_session_id = 0;
+        SessionId next_session_id = 0;
         std::mutex egress_mutex;
         std::mutex ingress_mutex;
 
