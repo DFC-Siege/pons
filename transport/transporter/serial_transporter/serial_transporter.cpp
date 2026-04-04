@@ -8,8 +8,12 @@ namespace transport {
 
 SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal)
     : BaseTransporter(), serial_hal(serial_hal) {
-        serial_hal.on_receive(
-            [this](Data data) { this->handle_receive(std::move(data)); });
+        serial_hal.on_receive([this](Data data) {
+                const auto result = this->try_callback(std::move(data));
+                if (result.failed()) {
+                        // TODO: Add log
+                }
+        });
 }
 
 result::Result<bool> SerialTransporter::send(Data &&data) {

@@ -9,7 +9,7 @@
 #include "result.hpp"
 
 namespace transport {
-using ReceiveCallback = std::function<void(Data &&)>;
+using ReceiveCallback = std::function<void(result::Result<Data>)>;
 
 template <typename T>
 concept Transporter =

@@ -16,7 +16,7 @@ class BaseTransporter {
         virtual MTU get_mtu() const = 0;
 
       protected:
-        result::Result<bool> handle_receive(Data &&data);
+        result::Result<bool> try_callback(Data &&data);
 
       private:
         std::optional<ReceiveCallback> callback;
