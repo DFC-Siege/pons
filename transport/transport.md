@@ -2,92 +2,37 @@
 
 ## Description
 
-A transporter is a protocol which handles the sending and receiving of data
-between a target and a source
+A transporter has to be able to send a buffer and receive a buffer.
+It receives a on_receive callback to send the data.
+A concrete transporter defines itself how it gets and sends its data via an
+interupt or polling etc.
 
-It just defines the
+# Protocol
 
-## Spec
+## Description
 
-### Packets
+A protocol has to be able to process a buffer and send and receive buffers via a
+transporter. Its goal is to implement a specific transport plan like chunked
+transport or a sliding window transport.
+It receives a transporter via dependency injection which it uses to send its
+payloads.
+It has a send function which receives the full payload to be sent and returns a
+result with a buffer.
+It also has a receive_callback where it unpacks the packet and either creates a
+new receiving buffer or sends a completed buffer to the callback.
 
-- PacketType payload for sending a payload, contents depend on implementation
-- PacketType ack for acknowleding receiving a packet
-- PacketType nack for receiving an invalid packet
-- PacketType fin for telling the target it won't send anything anymore
+# Dispatcher
 
-### Sender
+## Description
 
-A sender handles the outgoing payloads
-A concrete sender has to implement a send function which can send a packet
+A dispatcher can send and receive commands. It receives a protocol using
+dependency injection. it uses the receive_callback to be able to handle data
+using registered handlers or send data from registered commands.
 
-### Receiver
+When sending a payload, its first wrapped using a session id and a command.
+When receiving a payload, it tries to first unpack the payload by unpacking each
+part, but how does it know if it used chunks or not????? MTU? or does the
+wrapper struct need to be passed to the protocol? or a callback for unpacking?
 
-A receiver handles the incoming payloads
-A concrete receiver has to implement a receive function which can receive a
-packet
-
-### Dispatcher
-
-A dispatcher handles the completed in and outgoing payloads
-
-### Flow
-
-#### Two way data
-
-```pseudo
-source | dispatcher | dispatch data to sender     ->
-source | sender     | prepare data                ->
-
-repeat until done:
-source | sender     | send payload to target      ->
-target | receiver   | check payload               ->
-if valid:
-target | receiver   | collect and save payload         ->
-else
-target | receiver   | send ack to source         ->
-
-done:
-target | receiver   | send all data to dispatcher ->
-target | dispatcher | handle data                 ->
-target | dispatcher | send response to sender     ->
-
-repeat until done:
-target | sender     | send data to source         ->
-source | dispatcher | send data to receiver       ->
-source | receiver   | send ack to target          ->
-
-source | receiver   | send all data to dispatcher ->
-source | dispatcher | handle reponse
-```
-
-## Pseudo usages
-
-```pseudo
-enum dispatchers {
-        request_picture = 0x00
-}
-
-[serializable]
-[deserializable]
-struct picture_response {
-        buffer
-        width
-        height
-}
-
-[serializable]
-[deserializable]
-struct picture_request {
-        aec
-        width
-        height
-}
-
-picture_request payload
-var response = transporter.dispatch<picture_response>(dispatchers::request_picture, payload)
-if (response.failed()) {
-        // handle error using reponse.error()
-}
-var picture = response.value()
-```
+The dispatcher has a map of commands and handlers. A handler is just a function
+that receives data and returns a result.

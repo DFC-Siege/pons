@@ -13,11 +13,10 @@ namespace transport {
 class SerialTransporter {
       public:
         SerialTransporter(serial::ISerialHal &serial_hal);
-        result::Result<bool> send(std::span<const uint8_t> data);
-        result::Result<std::vector<uint8_t>> receive();
+        result::Result<bool> send(DataView data);
+        result::Result<bool> add_receiver(ReceiveCallback callback);
 
       private:
-        static constexpr auto TIMEOUT = 1000;
         serial::ISerialHal &serial_hal;
 };
 } // namespace transport

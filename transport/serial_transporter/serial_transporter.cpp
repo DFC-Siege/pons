@@ -9,8 +9,11 @@ SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal)
     : serial_hal(serial_hal) {
 }
 
-result::Result<bool> SerialTransporter::send(std::span<const uint8_t> data) {
+result::Result<bool> SerialTransporter::send(DataView data) {
         return this->serial_hal.send(data);
+}
+result::Result<bool> add_receiver(ReceiveCallback callback);
+result::Result<bool> SerialTransporter::send(std::span<const uint8_t> data) {
 }
 
 result::Result<std::vector<uint8_t>> SerialTransporter::receive() {
