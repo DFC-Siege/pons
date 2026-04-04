@@ -4,6 +4,8 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "i_logger.hpp"
+#include "logger.hpp"
 #include "transporter/transporter.hpp"
 
 namespace transport {
@@ -61,6 +63,7 @@ template <Transporter T> class Multiplexer {
         }
 
       private:
+        static constexpr auto TAG = "Multiplexer";
         friend class Channel;
         T &transporter;
         std::unordered_map<TransporterId, T &> transporters;
@@ -86,7 +89,9 @@ template <Transporter T> class Multiplexer {
         void handle_receive(Data &&data) {
                 size_t n = sizeof(TransporterId);
                 if (data.size() < n) {
-                        // TODO: Add logs
+                        logging::logger().println(
+                            logging::LogLevel::Error, TAG,
+                            "data is smaller than minimal size");
                         return;
                 }
 
@@ -95,7 +100,8 @@ template <Transporter T> class Multiplexer {
 
                 const auto transporter_result = try_get_transporter(id);
                 if (transporter_result.failed()) {
-                        // TODO: Add logs
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  transporter_result.error());
                         return;
                 }
 
