@@ -229,11 +229,11 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto chunk = chunk_result.value();
-                const auto next_index = get_last_index(chunk.session_id) + 1;
-                if (chunk.index != next_index) {
+                const auto expected_index = get_next_index(chunk.session_id);
+                if (chunk.index != expected_index) {
                         defered_function = [this, sid = chunk.session_id,
-                                            next_index]() {
-                                this->send_nack(sid, next_index);
+                                            expected_index]() {
+                                this->send_nack(sid, expected_index);
                         };
                         return defered_function;
                 }
@@ -246,8 +246,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         chunks[idx] = std::move(chunk);
                         ingress_map[chunk.session_id] = std::move(chunks);
                         defered_function = [this, sid = chunk.session_id,
-                                            next_index]() {
-                                this->send_ack(sid, next_index);
+                                            expected_index]() {
+                                this->send_ack(sid, expected_index);
                         };
                         return defered_function;
                 }
@@ -255,8 +255,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 auto &chunks = it->second;
                 if (chunk.index >= chunks.size()) {
                         defered_function = [this, sid = chunk.session_id,
-                                            next_index]() {
-                                this->send_nack(sid, next_index);
+                                            expected_index]() {
+                                this->send_nack(sid, expected_index);
                         };
                         return defered_function;
                 }
@@ -266,8 +266,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 const auto chunk_index = chunk.index;
                 chunks[chunk_index] = std::move(chunk);
 
-                defered_function = [this, sid, next_index]() {
-                        this->send_ack(sid, next_index);
+                defered_function = [this, sid, expected_index]() {
+                        this->send_ack(sid, expected_index);
                 };
 
                 if (chunk_index == total_chunks - 1) {
@@ -277,7 +277,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 return defered_function;
         }
 
-        Indexer get_last_index(SessionId id) const {
+        Indexer get_next_index(SessionId id) const {
                 const auto it = ingress_map.find(id);
                 if (it == ingress_map.end()) {
                         return 0;
@@ -288,7 +288,14 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         return 0;
                 }
 
-                return chunks.back().index;
+                for (Indexer i = 0; i < static_cast<Indexer>(chunks.size());
+                     ++i) {
+                        if (chunks[i].payload.empty()) {
+                                return i;
+                        }
+                }
+
+                return static_cast<Indexer>(chunks.size());
         }
 
         void handle_done_sending(SessionId id) {
