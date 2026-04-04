@@ -17,4 +17,10 @@ else()
                 DESTINATION include/pons
                 FILES_MATCHING PATTERN "*.hpp"
         )
+        if(PLATFORM STREQUAL "posix")
+                add_executable(serial_transporter_test serial_transporter_test.cpp)
+                target_link_libraries(serial_transporter_test PRIVATE Catch2::Catch2WithMain serial_transporter platform_async)
+                target_compile_features(serial_transporter_test PRIVATE cxx_std_20)
+                catch_discover_tests(serial_transporter_test)
+        endif()
 endif()

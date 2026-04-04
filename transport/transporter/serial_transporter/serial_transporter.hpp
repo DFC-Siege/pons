@@ -8,11 +8,13 @@
 namespace transport {
 class SerialTransporter : public BaseTransporter {
       public:
-        explicit SerialTransporter(serial::ISerialHal &serial_hal);
+        explicit SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu);
         result::Result<bool> send(Data &&data) override;
         MTU get_mtu() const override;
 
       private:
+        static constexpr auto TAG = "SerialTransporter";
         serial::ISerialHal &serial_hal;
+        MTU mtu;
 };
 } // namespace transport

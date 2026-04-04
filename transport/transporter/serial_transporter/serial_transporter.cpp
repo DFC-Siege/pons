@@ -1,17 +1,20 @@
 #include <cstdint>
 
+#include "i_logger.hpp"
+#include "logger.hpp"
 #include "result.hpp"
 #include "serial_transporter.hpp"
 #include "transporter/base_transporter.hpp"
 
 namespace transport {
 
-SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal)
-    : BaseTransporter(), serial_hal(serial_hal) {
+SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu)
+    : BaseTransporter(), serial_hal(serial_hal), mtu(mtu) {
         serial_hal.on_receive([this](Data data) {
                 const auto result = this->try_callback(result::ok(data));
                 if (result.failed()) {
-                        // TODO: Add log
+                        logging::logger().println(logging::LogLevel::Error, TAG,
+                                                  result.error());
                 }
         });
 }
@@ -21,7 +24,6 @@ result::Result<bool> SerialTransporter::send(Data &&data) {
 }
 
 MTU SerialTransporter::get_mtu() const {
-        // TODO: Get from correct place
-        return 512;
+        return mtu;
 }
 } // namespace transport
