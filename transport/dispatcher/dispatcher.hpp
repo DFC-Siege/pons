@@ -44,7 +44,6 @@ template <Transporter T> class Dispatcher {
       public:
         void register_transporter(TranporterId id,
                                   std::unique_ptr<T> transporter) {
-                std::lock_guard<std::mutex> lock(mutex);
                 transporter->set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
@@ -55,6 +54,7 @@ template <Transporter T> class Dispatcher {
 
                         handle_data(std::move(result).value());
                 });
+                std::lock_guard<std::mutex> lock(mutex);
                 transporters[id] = std::move(transporter);
         }
 
