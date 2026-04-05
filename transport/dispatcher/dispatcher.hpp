@@ -10,6 +10,7 @@
 #include "transporter.hpp"
 
 namespace transport {
+using TranporterId = uint16_t;
 using CommandId = uint16_t;
 using Handler = std::function<void(result::Result<Data>)>;
 
@@ -41,8 +42,10 @@ struct WrappedData {
 
 template <Transporter T> class Dispatcher {
       public:
-        Dispatcher(T &transporter) : transporter(transporter) {
-                transporter.set_receiver([this](result::Result<Data> result) {
+        void register_transporter(TranporterId id,
+                                  std::unique_ptr<T> transporter) {
+                std::lock_guard<std::mutex> lock(mutex);
+                transporter->set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -52,15 +55,28 @@ template <Transporter T> class Dispatcher {
 
                         handle_data(std::move(result).value());
                 });
+                transporters[id] = std::move(transporter);
         }
 
-        result::Result<bool> send(CommandId command_id, Data &&data) {
+        result::Result<bool> send(TranporterId transporter_id,
+                                  CommandId command_id, Data &&data) {
+                T *transporter = nullptr;
+                {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        auto it = transporters.find(transporter_id);
+                        if (it == transporters.end()) {
+                                return result::err(
+                                    "no transporter found with id");
+                        }
+                        transporter = it->second.get();
+                }
+
                 auto wrap_result =
                     WrappedData::wrap_data(command_id, std::move(data));
                 if (wrap_result.failed()) {
                         return result::err(wrap_result.error());
                 }
-                return transporter.send(std::move(wrap_result).value());
+                return transporter->send(std::move(wrap_result).value());
         }
 
         void register_handler(CommandId id, Handler &&handler) {
@@ -72,7 +88,7 @@ template <Transporter T> class Dispatcher {
       private:
         static constexpr auto TAG = "Dispatcher";
         std::unordered_map<CommandId, Handler> handlers;
-        T &transporter;
+        std::unordered_map<TranporterId, std::unique_ptr<T>> transporters;
         std::mutex mutex;
 
         void handle_data(Data &&data) {
