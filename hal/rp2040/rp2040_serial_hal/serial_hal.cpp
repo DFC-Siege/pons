@@ -7,13 +7,15 @@
 
 namespace serial {
 
-SerialHal::SerialHal() {
-        uart_init(uart1, BAUDRATE);
-        gpio_set_function(TX_PIN, GPIO_FUNC_UART);
-        gpio_set_function(RX_PIN, GPIO_FUNC_UART);
-        uart_set_hw_flow(uart1, false, false);
-        uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
-        uart_set_fifo_enabled(uart1, true);
+SerialHal::SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
+                     Baudrate baudrate)
+    : uart(uart), baudrate(baudrate), tx_pin(tx_pin), rx_pin(rx_pin) {
+        uart_init(this->uart, this->baudrate);
+        gpio_set_function(this->tx_pin, GPIO_FUNC_UART);
+        gpio_set_function(this->rx_pin, GPIO_FUNC_UART);
+        uart_set_hw_flow(this->uart, false, false);
+        uart_set_format(this->uart, 8, 1, UART_PARITY_NONE);
+        uart_set_fifo_enabled(this->uart, true);
 }
 
 result::Try SerialHal::send(Data &&data) {

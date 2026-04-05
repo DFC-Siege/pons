@@ -23,13 +23,13 @@ static int failed = 0;
 static serial::SerialHal *hal = nullptr;
 
 static void test_constructor_does_not_crash() {
-        hal = new serial::SerialHal();
+        hal = new serial::SerialHal(uart1, 4, 5, 115200);
         TEST_ASSERT(hal != nullptr);
 }
 
 static void test_send_returns_ok() {
-        const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
-        const auto result = hal->send(data);
+        std::vector<uint8_t> data = {0x01, 0x02, 0x03};
+        const auto result = hal->send(std::move(data));
         TEST_ASSERT(!result.failed());
 }
 
