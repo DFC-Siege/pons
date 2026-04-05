@@ -15,6 +15,7 @@ class BaseTransporter {
         virtual result::Result<bool> send(Data &&data) = 0;
         void set_receiver(ReceiveCallback callback);
         virtual MTU get_mtu() const = 0;
+        virtual ~BaseTransporter() = default;
 
       protected:
         result::Result<bool> try_callback(result::Result<Data> data);
