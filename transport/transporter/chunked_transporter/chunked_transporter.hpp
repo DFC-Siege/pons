@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <functional>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -216,21 +217,37 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
-                const auto &last_chunk = chunks.back();
-                if (last_chunk.index == last_chunk.total_chunks) {
+                if (ack.index >= chunks.size()) {
                         logging::logger().println(
-                            logging::LogLevel::Debug, TAG,
-                            "all chunks acked, done sending");
-                        handle_done_sending(last_chunk.session_id);
+                            logging::LogLevel::Error, TAG,
+                            "ack index is greater than chunks size");
                         return defered_function;
                 }
 
-                const auto sid = last_chunk.session_id;
-                const auto next_index = last_chunk.index + 1;
-                logging::logger().println(logging::LogLevel::Debug, TAG,
-                                          "sending next chunk, index: " +
-                                              std::to_string(next_index));
-                return [this, sid, next_index]() { send_ack(sid, next_index); };
+                const uint16_t total_chunks = chunks[ack.index].total_chunks;
+                if (ack.index >= total_chunks - 1) {
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "all chunks acked, done sending: " +
+                                std::to_string(ack.index + 1) + "/" +
+                                std::to_string(total_chunks));
+                        handle_done_sending(ack.session_id);
+                        return defered_function;
+                }
+
+                const auto sid = ack.session_id;
+                const auto next_index = ack.index + 1;
+
+                return [this, sid, next_index]() {
+                        std::scoped_lock lock(this->egress_mutex);
+                        auto it = this->egress_map.find(sid);
+                        if (it != this->egress_map.end() &&
+                            next_index < it->second.size()) {
+                                auto packet =
+                                    it->second.at(next_index).to_buf();
+                                this->transporter.send(std::move(packet));
+                        }
+                };
         }
 
         std::function<void()> handle_nack(Data &&data) {
