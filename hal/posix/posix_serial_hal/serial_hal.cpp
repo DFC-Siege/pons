@@ -1,5 +1,6 @@
 #include "serial_hal.hpp"
 #include "result.hpp"
+#include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -34,10 +35,12 @@ result::Result<bool> SerialHal::send(Data &&data) {
         const uint8_t prefix[LENGTH_PREFIX_SIZE] = {
             static_cast<uint8_t>(length & 0xFF),
             static_cast<uint8_t>((length >> 8) & 0xFF)};
+
         if (write(fd, prefix, LENGTH_PREFIX_SIZE) < 0)
                 return result::err("failed to write length prefix");
         if (write(fd, data.data(), data.size()) < 0)
                 return result::err("failed to write to serial port");
+
         return result::ok();
 }
 
@@ -48,8 +51,14 @@ void SerialHal::on_receive(ReceiveCallback cb) {
 result::Result<bool> SerialHal::loop() {
         uint8_t tmp[BUF_SIZE];
         const auto length = read(fd, tmp, BUF_SIZE);
-        if (length < 0)
+
+        if (length < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        return result::ok();
+                }
                 return result::err("failed to read from serial port");
+        }
+
         if (length == 0)
                 return result::ok();
 
@@ -57,8 +66,8 @@ result::Result<bool> SerialHal::loop() {
 
         while (buffer.size() >= LENGTH_PREFIX_SIZE) {
                 const uint16_t packet_length =
-                    static_cast<uint16_t>(buffer[0]) |
-                    (static_cast<uint16_t>(buffer[1]) << 8);
+                    static_cast<uint16_t>(buffer) |
+                    (static_cast<uint16_t>(buffer) << 8);
 
                 if (buffer.size() < LENGTH_PREFIX_SIZE + packet_length)
                         break;
@@ -66,6 +75,7 @@ result::Result<bool> SerialHal::loop() {
                 Data packet(buffer.begin() + LENGTH_PREFIX_SIZE,
                             buffer.begin() + LENGTH_PREFIX_SIZE +
                                 packet_length);
+
                 buffer.erase(buffer.begin(), buffer.begin() +
                                                  LENGTH_PREFIX_SIZE +
                                                  packet_length);
