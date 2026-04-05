@@ -7,7 +7,13 @@
 static serial::SerialHal *hal = nullptr;
 
 static void test_constructor_does_not_crash() {
-        hal = new serial::SerialHal();
+        static constexpr auto BAUDRATE = 115200;
+        static constexpr auto BUFFER_SIZE = 1024;
+        static constexpr auto UART = UART_NUM_1;
+        static constexpr auto TX_PIN = 7;
+        static constexpr auto RX_PIN = 6;
+        hal =
+            new serial::SerialHal(UART, RX_PIN, TX_PIN, BAUDRATE, BUFFER_SIZE);
         TEST_ASSERT_TRUE(true);
 }
 

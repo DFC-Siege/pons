@@ -6,8 +6,11 @@
 #include "serial_hal.hpp"
 
 namespace serial {
-SerialHal::SerialHal() {
-        uart_config_t uart_config = {.baud_rate = BAUDRATE,
+SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
+                     Baudrate baudrate, BufferSize buffer_size)
+    : baudrate(baudrate), buffer_size(buffer_size), uart(uart), tx_pin(tx_pin),
+      rx_pin(rx_pin) {
+        uart_config_t uart_config = {.baud_rate = baudrate,
                                      .data_bits = UART_DATA_8_BITS,
                                      .parity = UART_PARITY_DISABLE,
                                      .stop_bits = UART_STOP_BITS_1,
@@ -17,9 +20,9 @@ SerialHal::SerialHal() {
                                      .source_clk = UART_SCLK_DEFAULT,
                                      .flags = {}};
 
-        uart_driver_install(UART_NUM_1, BUF_SIZE * 2, 0, 0, NULL, 0);
-        uart_param_config(UART_NUM_1, &uart_config);
-        uart_set_pin(UART_NUM_1, TX_PIN, RX_PIN, UART_PIN_NO_CHANGE,
+        uart_driver_install(uart, buffer_size * 2, 0, 0, NULL, 0);
+        uart_param_config(uart, &uart_config);
+        uart_set_pin(uart, tx_pin, rx_pin, UART_PIN_NO_CHANGE,
                      UART_PIN_NO_CHANGE);
 }
 
@@ -31,10 +34,9 @@ result::Try SerialHal::send(Data &&data) {
         const uint16_t length = static_cast<uint16_t>(data.size());
         const uint8_t prefix[2] = {static_cast<uint8_t>(length & 0xFF),
                                    static_cast<uint8_t>((length >> 8) & 0xFF)};
-        uart_write_bytes(UART_NUM_1, prefix, sizeof(prefix));
+        uart_write_bytes(uart, prefix, sizeof(prefix));
 
-        const auto response =
-            uart_write_bytes(UART_NUM_1, data.data(), data.size());
+        const auto response = uart_write_bytes(uart, data.data(), data.size());
         if (response < 0) {
                 return result::err(
                     "something went wrong while sending over serial");
@@ -47,8 +49,8 @@ void SerialHal::on_receive(ReceiveCallback cb) {
 }
 
 result::Try SerialHal::loop() {
-        Data tmp(BUF_SIZE);
-        int length = uart_read_bytes(UART_NUM_1, tmp.data(), BUF_SIZE, 0);
+        Data tmp(buffer_size);
+        int length = uart_read_bytes(uart, tmp.data(), buffer_size, 0);
         if (length < 0) {
                 return result::err(
                     "something went wrong while reading over serial");
