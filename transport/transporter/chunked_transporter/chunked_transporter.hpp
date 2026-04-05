@@ -450,4 +450,6 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                     };
         }
 };
+
+static_assert(Transporter<ChunkedTransporter<BaseTransporter>>);
 } // namespace transport

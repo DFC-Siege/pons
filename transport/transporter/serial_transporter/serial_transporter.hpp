@@ -17,4 +17,6 @@ class SerialTransporter : public BaseTransporter {
         serial::ISerialHal &serial_hal;
         MTU mtu;
 };
+
+static_assert(Transporter<SerialTransporter>);
 } // namespace transport

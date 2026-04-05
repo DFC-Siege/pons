@@ -33,4 +33,6 @@ template <Transporter T> class DirectTransporter : public BaseTransporter {
         static constexpr auto TAG = "DirectTransporter";
         T &transporter;
 };
+
+static_assert(Transporter<DirectTransporter<BaseTransporter>>);
 } // namespace transport

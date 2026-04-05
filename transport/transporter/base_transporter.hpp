@@ -23,4 +23,6 @@ class BaseTransporter {
       private:
         std::optional<ReceiveCallback> callback;
 };
+
+static_assert(Transporter<BaseTransporter>);
 } // namespace transport

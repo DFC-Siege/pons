@@ -62,6 +62,8 @@ template <Transporter T> class Multiplexer {
                 TransporterId id;
         };
 
+        static_assert(Transporter<InnerChannel>);
+
         InnerChannel &create_inner_channel(TransporterId id) {
                 const std::scoped_lock lock(mutex);
                 auto [it, _] = inner_channels.emplace(
