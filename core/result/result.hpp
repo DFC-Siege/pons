@@ -96,4 +96,11 @@ template <typename T> Result<T &> ok_ref(T &value) {
         return {false, "", &value};
 }
 
+#define TRY(expr)                                                              \
+        ({                                                                     \
+                auto _result = (expr);                                         \
+                if (_result.failed())                                          \
+                        return result::err(_result.error());                   \
+                std::move(_result).value();                                    \
+        })
 } // namespace result

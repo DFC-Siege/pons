@@ -5,6 +5,7 @@ if(ESP_PLATFORM)
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/result
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/logger
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/serializer
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/http_client
@@ -56,6 +57,7 @@ else()
         add_subdirectory(core/result)
         add_subdirectory(core/logger)
         add_subdirectory(core/logger/console_logger)
+        add_subdirectory(core/serializer)
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)
         add_subdirectory(hal/http_client)
