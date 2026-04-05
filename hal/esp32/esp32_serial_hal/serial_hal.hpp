@@ -9,6 +9,9 @@
 #include "i_serial_hal.hpp"
 #include "result.hpp"
 
+struct QueueDefinition;
+using QueueHandle_t = QueueDefinition *;
+
 namespace serial {
 using Baudrate = int;
 using BufferSize = uint32_t;
@@ -30,5 +33,7 @@ class SerialHal : public ISerialHal {
         Pin rx_pin;
         ReceiveCallback receive_callback;
         Data buffer;
+        Data tmp;
+        QueueHandle_t event_queue = nullptr;
 };
 } // namespace serial
