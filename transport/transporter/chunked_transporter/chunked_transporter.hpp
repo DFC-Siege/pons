@@ -9,12 +9,15 @@
 
 #include "i_logger.hpp"
 #include "logger.hpp"
+#include "mutex.hpp"
 #include "packet.hpp"
+#include "platform_mutex.hpp"
 #include "transporter/base_transporter.hpp"
 #include "transporter/transporter.hpp"
 
 namespace transport {
-template <Transporter T> class ChunkedTransporter : public BaseTransporter {
+template <Transporter T, locking::Mutex M = DefaultMutex>
+class ChunkedTransporter : public BaseTransporter {
       public:
         ChunkedTransporter(T &transporter, uint16_t max_tries)
             : transporter(transporter), max_tries(max_tries) {
@@ -35,7 +38,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                                               std::to_string(data.size()));
                 Data packet;
                 {
-                        std::scoped_lock lock(egress_mutex);
+                        std::lock_guard<M> lock(egress_mutex);
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
                         if (session_result.failed()) {
@@ -93,8 +96,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         std::unordered_map<SessionId, std::vector<Chunk>> ingress_map;
         uint16_t max_tries = 0;
         SessionId next_session_id = 0;
-        std::mutex egress_mutex;
-        std::mutex ingress_mutex;
+        M egress_mutex;
+        M ingress_mutex;
 
         result::Result<SessionId> generate_session_id(
             const std::unordered_map<SessionId, std::vector<Chunk>> &chunks,
@@ -131,7 +134,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
 
                 std::function<void()> defer;
                 {
-                        std::scoped_lock lock(ingress_mutex);
+                        std::lock_guard<M> lock(ingress_mutex);
                         switch (type_result.value()) {
                         case PacketType::ack:
                                 logging::logger().println(
@@ -243,7 +246,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 const auto next_index = ack.index + 1;
 
                 return [this, sid, next_index]() {
-                        std::scoped_lock lock(this->egress_mutex);
+                        std::lock_guard<M> lock(this->egress_mutex);
                         auto it = this->egress_map.find(sid);
                         if (it != this->egress_map.end() &&
                             next_index < it->second.size()) {
@@ -301,7 +304,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 const auto retry_index = nack.index;
 
                 return [this, sid, retry_index]() {
-                        std::scoped_lock lock(this->egress_mutex);
+                        std::lock_guard<M> lock(this->egress_mutex);
                         auto it = this->egress_map.find(sid);
                         if (it != this->egress_map.end() &&
                             retry_index < it->second.size()) {

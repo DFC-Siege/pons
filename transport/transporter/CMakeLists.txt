@@ -2,7 +2,7 @@ if(ESP_PLATFORM)
         idf_component_register(
                 SRCS "base_transporter.cpp"
                 INCLUDE_DIRS "."
-                REQUIRES transport logger
+                REQUIRES transport logger mutex platform
         )
 else()
         add_library(transporter base_transporter.cpp)
@@ -10,7 +10,7 @@ else()
                 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
                 $<INSTALL_INTERFACE:include/pons>
         )
-        target_link_libraries(transporter PUBLIC transport logger)
+        target_link_libraries(transporter PUBLIC transport logger mutex platform)
         target_compile_features(transporter PUBLIC cxx_std_20)
         install(TARGETS transporter EXPORT pons-targets)
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
@@ -19,11 +19,11 @@ else()
         )
         if(PLATFORM STREQUAL "posix")
                 add_executable(multiplexer_test multiplexer_test.cpp)
-                target_link_libraries(multiplexer_test PRIVATE Catch2::Catch2WithMain transporter)
+                target_link_libraries(multiplexer_test PRIVATE Catch2::Catch2WithMain transporter mutex platform)
                 target_compile_features(multiplexer_test PRIVATE cxx_std_20)
                 catch_discover_tests(multiplexer_test)
                 add_executable(base_transporter_test base_transporter_test.cpp)
-                target_link_libraries(base_transporter_test PRIVATE Catch2::Catch2WithMain transporter)
+                target_link_libraries(base_transporter_test PRIVATE Catch2::Catch2WithMain transporter mutex platform)
                 target_compile_features(base_transporter_test PRIVATE cxx_std_20)
                 catch_discover_tests(base_transporter_test)
         endif()

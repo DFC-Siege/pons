@@ -9,6 +9,8 @@
 #include "base_transporter.hpp"
 #include "i_logger.hpp"
 #include "logger.hpp"
+#include "mutex.hpp"
+#include "platform_mutex.hpp"
 #include "result.hpp"
 #include "transport_data.hpp"
 #include "transporter.hpp"
@@ -17,7 +19,7 @@ namespace transport {
 
 using TransporterId = uint8_t;
 
-template <Transporter T> class Multiplexer {
+template <Transporter T, locking::Mutex M = DefaultMutex> class Multiplexer {
       public:
         explicit Multiplexer(T &transporter) : transporter(transporter) {
                 transporter.set_receiver([this](result::Result<Data> result) {
@@ -65,7 +67,7 @@ template <Transporter T> class Multiplexer {
         static_assert(Transporter<InnerChannel>);
 
         InnerChannel &create_inner_channel(TransporterId id) {
-                const std::scoped_lock lock(mutex);
+                const std::lock_guard<M> lock(mutex);
                 auto [it, _] = inner_channels.emplace(
                     id, std::make_unique<InnerChannel>(*this, id));
                 return *it->second;
@@ -78,11 +80,11 @@ template <Transporter T> class Multiplexer {
         T &transporter;
         std::unordered_map<TransporterId, std::unique_ptr<InnerChannel>>
             inner_channels;
-        std::mutex mutex;
+        M mutex;
 
         result::Try send_with_id(TransporterId id, Data &&data) {
                 {
-                        const std::scoped_lock lock(mutex);
+                        const std::lock_guard<M> lock(mutex);
                         if (inner_channels.find(id) == inner_channels.end()) {
                                 return result::err("channel not registered");
                         }
@@ -103,7 +105,7 @@ template <Transporter T> class Multiplexer {
 
                 InnerChannel *channel_ptr = nullptr;
                 {
-                        const std::scoped_lock lock(mutex);
+                        const std::lock_guard<M> lock(mutex);
                         auto it = inner_channels.find(id);
                         if (it != inner_channels.end()) {
                                 channel_ptr = it->second.get();
