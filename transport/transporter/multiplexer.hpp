@@ -69,14 +69,6 @@ template <Transporter T> class Multiplexer {
                 return *it->second;
         }
 
-        BaseTransporter &
-        register_channel(TransporterId id,
-                         std::unique_ptr<BaseTransporter> transporter) {
-                const std::scoped_lock lock(mutex);
-                auto [it, _] = channels.emplace(id, std::move(transporter));
-                return *it->second;
-        }
-
       private:
         static constexpr auto TAG = "Multiplexer";
         friend class InnerChannel;
@@ -84,8 +76,6 @@ template <Transporter T> class Multiplexer {
         T &transporter;
         std::unordered_map<TransporterId, std::unique_ptr<InnerChannel>>
             inner_channels;
-        std::unordered_map<TransporterId, std::unique_ptr<BaseTransporter>>
-            channels;
         std::mutex mutex;
 
         result::Result<bool> send_with_id(TransporterId id, Data &&data) {
