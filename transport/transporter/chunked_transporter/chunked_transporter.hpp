@@ -275,16 +275,25 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto &chunks = it->second;
-                if (chunks.empty()) {
+                if (nack.index >= chunks.size()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
-                                                  "chunks are empty");
+                                                  "nack index out of bounds");
                         return defered_function;
                 }
 
-                const auto &last_chunk = chunks.back();
-                const auto sid = last_chunk.session_id;
-                const auto index = last_chunk.index;
-                return [this, sid, index]() { send_nack(sid, index); };
+                const auto sid = nack.session_id;
+                const auto retry_index = nack.index;
+
+                return [this, sid, retry_index]() {
+                        std::scoped_lock lock(this->egress_mutex);
+                        auto it = this->egress_map.find(sid);
+                        if (it != this->egress_map.end() &&
+                            retry_index < it->second.size()) {
+                                auto packet =
+                                    it->second.at(retry_index).to_buf();
+                                this->transporter.send(std::move(packet));
+                        }
+                };
         }
 
         std::function<void()> handle_chunk(Data &&data) {
