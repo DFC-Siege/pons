@@ -1,10 +1,12 @@
 #pragma once
-#include "i_serial_hal.hpp"
-#include "result.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <termios.h>
 #include <vector>
+
+#include "i_serial_hal.hpp"
+#include "result.hpp"
 
 namespace serial {
 
