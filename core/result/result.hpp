@@ -78,7 +78,7 @@ struct Error {
         }
 };
 
-using Status = Result<bool>;
+using Try = Result<bool>;
 
 inline Error err(std::string_view message) {
         return {std::string(message)};

@@ -21,7 +21,7 @@ template <Transporter T> class DirectTransporter : public BaseTransporter {
                 });
         }
 
-        result::Status send(Data &&data) override {
+        result::Try send(Data &&data) override {
                 return transporter.send(std::move(data));
         }
 

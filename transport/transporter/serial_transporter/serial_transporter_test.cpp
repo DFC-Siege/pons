@@ -9,7 +9,7 @@ struct MockSerialHal : public serial::ISerialHal {
         std::vector<Data> sent;
         serial::ReceiveCallback receiver;
 
-        result::Status send(serial::Data &&data) override {
+        result::Try send(serial::Data &&data) override {
                 sent.push_back(data);
                 return result::ok(true);
         }
@@ -18,7 +18,7 @@ struct MockSerialHal : public serial::ISerialHal {
                 receiver = std::move(callback);
         }
 
-        result::Status loop() override {
+        result::Try loop() override {
                 return result::ok(true);
         }
 

@@ -16,7 +16,7 @@ concept Transporter =
     requires(T t, const T ct, Data &&data, ReceiveCallback callback) {
             {
                     t.send(static_cast<Data &&>(data))
-            } -> std::same_as<result::Status>;
+            } -> std::same_as<result::Try>;
             { t.set_receiver(callback) } -> std::same_as<void>;
             { ct.get_mtu() } -> std::same_as<MTU>;
     };

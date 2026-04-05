@@ -9,7 +9,7 @@ namespace transport {
 class SerialTransporter : public BaseTransporter {
       public:
         explicit SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu);
-        result::Status send(Data &&data) override;
+        result::Try send(Data &&data) override;
         MTU get_mtu() const override;
 
       private:

@@ -14,9 +14,9 @@ class SerialHal : public ISerialHal {
         ~SerialHal();
         SerialHal(const SerialHal &) = delete;
         SerialHal &operator=(const SerialHal &) = delete;
-        result::Status send(Data &&data) override;
+        result::Try send(Data &&data) override;
         void on_receive(ReceiveCallback cb) override;
-        result::Status loop() override;
+        result::Try loop() override;
 
       private:
         int fd;

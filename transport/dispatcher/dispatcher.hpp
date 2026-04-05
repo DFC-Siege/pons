@@ -58,7 +58,7 @@ template <Transporter T> class Dispatcher {
                 transporters[id] = std::move(transporter);
         }
 
-        result::Status send(TranporterId transporter_id,
+        result::Try send(TranporterId transporter_id,
                                   CommandId command_id, Data &&data) {
                 T *transporter = nullptr;
                 {

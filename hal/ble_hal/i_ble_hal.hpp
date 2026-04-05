@@ -13,7 +13,7 @@ using ConnectionCallback = std::function<void(bool connected)>;
 
 struct IBleHal {
         virtual ~IBleHal() = default;
-        virtual result::Status send(std::span<const uint8_t> data) = 0;
+        virtual result::Try send(std::span<const uint8_t> data) = 0;
         virtual void on_receive(ReceiveCallback cb) = 0;
         virtual void on_connection_changed(ConnectionCallback cb) = 0;
         virtual bool is_connected() const = 0;

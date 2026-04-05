@@ -10,7 +10,7 @@ namespace kv {
 class IStore {
       public:
         virtual ~IStore() = default;
-        virtual result::Status store(std::string_view key,
+        virtual result::Try store(std::string_view key,
                                            std::string_view value) = 0;
         virtual result::Result<std::string> get(std::string_view key) = 0;
 };

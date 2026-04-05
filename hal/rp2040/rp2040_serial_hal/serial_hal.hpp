@@ -10,9 +10,9 @@ namespace serial {
 class SerialHal : public ISerialHal {
       public:
         SerialHal();
-        result::Status send(Data &&data) override;
+        result::Try send(Data &&data) override;
         void on_receive(ReceiveCallback cb) override;
-        result::Status loop() override;
+        result::Try loop() override;
 
       private:
         static constexpr auto BAUDRATE = 115200;

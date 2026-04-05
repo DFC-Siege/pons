@@ -16,7 +16,7 @@ void NvsStore::assert_initialized() {
 NvsStore::NvsStore(std::string_view ns) : ns(ns) {
 }
 
-result::Status NvsStore::try_init(int count) {
+result::Try NvsStore::try_init(int count) {
         auto err = nvs_flash_init();
         switch (err) {
         case ESP_OK:
@@ -44,7 +44,7 @@ result::Status NvsStore::try_init(int count) {
         return result::ok();
 }
 
-result::Status NvsStore::try_open() {
+result::Try NvsStore::try_open() {
         NvsStore::assert_initialized();
 
         auto ret = nvs_open(std::string(ns).c_str(), NVS_READWRITE, &handle);
@@ -91,7 +91,7 @@ result::Result<NvsStore> NvsStore::init(std::string_view ns) {
         return result::ok(store);
 }
 
-result::Status NvsStore::store(std::string_view key,
+result::Try NvsStore::store(std::string_view key,
                                      std::string_view value) {
         NvsStore::assert_initialized();
 
@@ -138,7 +138,7 @@ result::Result<std::string> NvsStore::get(std::string_view key) {
 
         const auto key_str = std::string(key);
 
-        auto check = [](esp_err_t ret) -> result::Status {
+        auto check = [](esp_err_t ret) -> result::Try {
                 switch (ret) {
                 case ESP_OK:
                         return result::ok();

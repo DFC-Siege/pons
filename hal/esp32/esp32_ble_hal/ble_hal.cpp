@@ -81,7 +81,7 @@ void BleHal::begin(std::string_view device_name) {
         });
 }
 
-result::Status BleHal::send(std::span<const uint8_t> data) {
+result::Try BleHal::send(std::span<const uint8_t> data) {
         if (!is_connected()) {
                 return result::err("ble not connected");
         }

@@ -28,7 +28,7 @@ SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu)
         });
 }
 
-result::Status SerialTransporter::send(Data &&data) {
+result::Try SerialTransporter::send(Data &&data) {
         if (data.size() > mtu) {
                 logging::logger().println(
                     logging::LogLevel::Error, TAG,

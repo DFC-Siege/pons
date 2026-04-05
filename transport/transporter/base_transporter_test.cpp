@@ -10,7 +10,7 @@ struct ConcreteTransporter : public BaseTransporter {
         MTU mtu = 64;
         std::vector<Data> sent;
 
-        result::Status send(Data &&data) override {
+        result::Try send(Data &&data) override {
                 sent.push_back(std::move(data));
                 return result::ok(true);
         }
@@ -19,7 +19,7 @@ struct ConcreteTransporter : public BaseTransporter {
                 return mtu;
         }
 
-        result::Status emit(result::Result<Data> data) {
+        result::Try emit(result::Result<Data> data) {
                 return try_callback(std::move(data));
         }
 };

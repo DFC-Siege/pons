@@ -23,7 +23,7 @@ SerialHal::SerialHal() {
                      UART_PIN_NO_CHANGE);
 }
 
-result::Status SerialHal::send(Data &&data) {
+result::Try SerialHal::send(Data &&data) {
         if (data.empty()) {
                 return result::ok();
         }
@@ -46,7 +46,7 @@ void SerialHal::on_receive(ReceiveCallback cb) {
         receive_callback = std::move(cb);
 }
 
-result::Status SerialHal::loop() {
+result::Try SerialHal::loop() {
         Data tmp(BUF_SIZE);
         int length = uart_read_bytes(UART_NUM_1, tmp.data(), BUF_SIZE, 0);
         if (length < 0) {

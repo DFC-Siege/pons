@@ -12,9 +12,9 @@ using ReceiveCallback = std::function<void(Data &&data)>;
 
 struct ISerialHal {
         virtual ~ISerialHal() = default;
-        virtual result::Status send(Data &&data) = 0;
+        virtual result::Try send(Data &&data) = 0;
         virtual void on_receive(ReceiveCallback cb) = 0;
-        virtual result::Status loop() = 0;
+        virtual result::Try loop() = 0;
 };
 
 } // namespace serial

@@ -17,7 +17,7 @@ struct MockTransporter {
                 receiver = std::move(fn);
         }
 
-        result::Status send(Data &&data) {
+        result::Try send(Data &&data) {
                 sent.push_back(data);
                 return result::ok(true);
         }

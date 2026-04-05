@@ -12,13 +12,13 @@
 namespace transport {
 class BaseTransporter {
       public:
-        virtual result::Status send(Data &&data) = 0;
+        virtual result::Try send(Data &&data) = 0;
         void set_receiver(ReceiveCallback callback);
         virtual MTU get_mtu() const = 0;
         virtual ~BaseTransporter() = default;
 
       protected:
-        result::Status try_callback(result::Result<Data> data);
+        result::Try try_callback(result::Result<Data> data);
 
       private:
         std::optional<ReceiveCallback> callback;
