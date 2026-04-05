@@ -58,8 +58,8 @@ template <Transporter T> class Multiplexer {
 
               private:
                 static constexpr auto TAG = "InnerChannel";
-                TransporterId id;
                 Multiplexer &parent;
+                TransporterId id;
         };
 
         InnerChannel &create_inner_channel(TransporterId id) {
