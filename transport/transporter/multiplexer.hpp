@@ -16,7 +16,6 @@
 namespace transport {
 
 using TransporterId = uint8_t;
-using SendFn = std::function<result::Result<bool>(Data &&)>;
 
 template <Transporter T> class Multiplexer {
       public:
@@ -32,50 +31,6 @@ template <Transporter T> class Multiplexer {
                 });
         }
 
-        class Channel : public BaseTransporter {
-              public:
-                Channel(Multiplexer &parent, T &transporter, TransporterId id)
-                    : parent(parent), transporter(transporter), id(id) {
-                        transporter.set_receiver(
-                            [this](result::Result<Data> data) {
-                                    const auto result = try_callback(data);
-                                    if (result.failed()) {
-                                            logging::logger().println(
-                                                logging::LogLevel::Error, TAG,
-                                                result.error());
-                                    }
-                            });
-                }
-
-                result::Result<bool> send(Data &&data) {
-                        logging::logger().println(
-                            logging::LogLevel::Debug, TAG,
-                            "channel: " + std::to_string(id) +
-                                " sending packet, size: " +
-                                std::to_string(data.size()));
-                        return transporter.send(std::move(data));
-                }
-
-                MTU get_mtu() const {
-                        return transporter.get_mtu();
-                }
-
-                void receive(result::Result<Data> data) {
-                        const auto result = try_callback(data);
-                        if (result.failed()) {
-                                logging::logger().println(
-                                    logging::LogLevel::Error, TAG,
-                                    result.error());
-                        }
-                }
-
-              private:
-                static constexpr auto TAG = "Channel";
-                Multiplexer &parent;
-                T &transporter;
-                TransporterId id;
-        };
-
         class InnerChannel : public BaseTransporter {
               public:
                 InnerChannel(Multiplexer &parent, TransporterId id)
@@ -83,18 +38,12 @@ template <Transporter T> class Multiplexer {
                 }
 
                 result::Result<bool> send(Data &&data) override {
-                        logging::logger().println(
-                            logging::LogLevel::Debug, TAG,
-                            "inner channel: " + std::to_string(id) +
-                                " forwarding to parent, size: " +
-                                std::to_string(data.size()));
                         return parent.send_with_id(id, std::move(data));
                 }
 
                 MTU get_mtu() const override {
                         const auto mtu = parent.transporter.get_mtu();
-                        assert(mtu >= sizeof(TransporterId) &&
-                               "attempted to use mtu <= 0");
+                        assert(mtu >= sizeof(TransporterId));
                         return mtu - sizeof(TransporterId);
                 }
 
@@ -130,7 +79,6 @@ template <Transporter T> class Multiplexer {
 
       private:
         static constexpr auto TAG = "Multiplexer";
-        friend class Channel;
         friend class InnerChannel;
 
         T &transporter;
@@ -141,20 +89,9 @@ template <Transporter T> class Multiplexer {
         std::mutex mutex;
 
         result::Result<bool> send_with_id(TransporterId id, Data &&data) {
-                logging::logger().println(
-                    logging::LogLevel::Debug, TAG,
-                    "multiplexer: wrapping data for channel: " +
-                        std::to_string(id) +
-                        " size: " + std::to_string(data.size()));
-
                 {
                         const std::scoped_lock lock(mutex);
-                        auto it = inner_channels.find(id);
-                        if (it == inner_channels.end()) {
-                                logging::logger().println(
-                                    logging::LogLevel::Error, TAG,
-                                    "multiplexer: failed to find channel: " +
-                                        std::to_string(id));
+                        if (inner_channels.find(id) == inner_channels.end()) {
                                 return result::err("channel not registered");
                         }
                 }
@@ -165,9 +102,6 @@ template <Transporter T> class Multiplexer {
 
         void handle_receive(Data &&data) {
                 if (data.size() < sizeof(TransporterId)) {
-                        logging::logger().println(
-                            logging::LogLevel::Error, TAG,
-                            "data is smaller than minimal size");
                         return;
                 }
 
@@ -175,21 +109,22 @@ template <Transporter T> class Multiplexer {
                 std::memcpy(&id, data.data(), sizeof(TransporterId));
                 data.erase(data.begin(), data.begin() + sizeof(TransporterId));
 
-                logging::logger().println(
-                    logging::LogLevel::Debug, TAG,
-                    "received packet for channel: " + std::to_string(id) +
-                        " size: " + std::to_string(data.size()));
+                InnerChannel *channel_ptr = nullptr;
+                {
+                        const std::scoped_lock lock(mutex);
+                        auto it = inner_channels.find(id);
+                        if (it != inner_channels.end()) {
+                                channel_ptr = it->second.get();
+                        }
+                }
 
-                const std::scoped_lock lock(mutex);
-                auto it = inner_channels.find(id);
-                if (it == inner_channels.end()) {
+                if (channel_ptr) {
+                        channel_ptr->receive(result::ok(std::move(data)));
+                } else {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   "channel not found: " +
                                                       std::to_string(id));
-                        return;
                 }
-
-                it->second->receive(result::ok(std::move(data)));
         }
 };
 
