@@ -48,7 +48,12 @@ template <Transporter T> class Multiplexer {
                 }
 
                 result::Result<bool> send(Data &&data) {
-                        return transporter.send(data);
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "channel: " + std::to_string(id) +
+                                " sending packet, size: " +
+                                std::to_string(data.size()));
+                        return transporter.send(std::move(data));
                 }
 
                 MTU get_mtu() const {
@@ -78,6 +83,11 @@ template <Transporter T> class Multiplexer {
                 }
 
                 result::Result<bool> send(Data &&data) override {
+                        logging::logger().println(
+                            logging::LogLevel::Debug, TAG,
+                            "inner channel: " + std::to_string(id) +
+                                " forwarding to parent, size: " +
+                                std::to_string(data.size()));
                         return parent.send_with_id(id, std::move(data));
                 }
 
@@ -131,11 +141,24 @@ template <Transporter T> class Multiplexer {
         std::mutex mutex;
 
         result::Result<bool> send_with_id(TransporterId id, Data &&data) {
-                const std::scoped_lock lock(mutex);
-                auto it = inner_channels.find(id);
-                if (it == inner_channels.end()) {
-                        return result::err("channel not registered");
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "multiplexer: wrapping data for channel: " +
+                        std::to_string(id) +
+                        " size: " + std::to_string(data.size()));
+
+                {
+                        const std::scoped_lock lock(mutex);
+                        auto it = inner_channels.find(id);
+                        if (it == inner_channels.end()) {
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    "multiplexer: failed to find channel: " +
+                                        std::to_string(id));
+                                return result::err("channel not registered");
+                        }
                 }
+
                 data.insert(data.begin(), id);
                 return transporter.send(std::move(data));
         }
@@ -152,11 +175,17 @@ template <Transporter T> class Multiplexer {
                 std::memcpy(&id, data.data(), sizeof(TransporterId));
                 data.erase(data.begin(), data.begin() + sizeof(TransporterId));
 
+                logging::logger().println(
+                    logging::LogLevel::Debug, TAG,
+                    "received packet for channel: " + std::to_string(id) +
+                        " size: " + std::to_string(data.size()));
+
                 const std::scoped_lock lock(mutex);
                 auto it = inner_channels.find(id);
                 if (it == inner_channels.end()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
-                                                  "channel not found");
+                                                  "channel not found: " +
+                                                      std::to_string(id));
                         return;
                 }
 

@@ -30,18 +30,25 @@ SerialTransporter::SerialTransporter(serial::ISerialHal &serial_hal, MTU mtu)
 
 result::Result<bool> SerialTransporter::send(Data &&data) {
         if (data.size() > mtu) {
+                logging::logger().println(
+                    logging::LogLevel::Error, TAG,
+                    "send failed: data size " + std::to_string(data.size()) +
+                        " exceeds MTU " + std::to_string(mtu));
                 return result::err("data bigger(" +
                                    std::to_string(data.size()) +
                                    ") than mtu: " + std::to_string(mtu));
         }
+
         logging::logger().println(
             logging::LogLevel::Debug, TAG,
-            "sending " + std::to_string(data.size()) + " bytes: " + [&] {
-                    std::string hex;
-                    for (auto b : data)
-                            hex += std::to_string(b) + " ";
-                    return hex;
-            }());
+            "serial: sending " + std::to_string(data.size()) +
+                " bytes: " + [&] {
+                        std::string hex;
+                        for (auto b : data)
+                                hex += std::to_string(b) + " ";
+                        return hex;
+                }());
+
         return this->serial_hal.send(std::move(data));
 }
 
