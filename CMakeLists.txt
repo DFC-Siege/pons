@@ -17,6 +17,7 @@ if(ESP_PLATFORM)
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter/chunked_transporter
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter/serial_transporter
+                ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter/direct_transporter
         )
         include($ENV{IDF_PATH}/tools/cmake/project.cmake)
         project(pons)
@@ -42,6 +43,7 @@ elseif(PLATFORM STREQUAL "rp2040")
         add_subdirectory(transport/transporter)
         add_subdirectory(transport/transporter/chunked_transporter)
         add_subdirectory(transport/transporter/serial_transporter)
+        add_subdirectory(transport/transporter/direct_transporter)
 else()
         project(pons CXX)
         set(CMAKE_CXX_STANDARD 23)
@@ -73,6 +75,7 @@ else()
         add_subdirectory(transport/transporter)
         add_subdirectory(transport/transporter/chunked_transporter)
         add_subdirectory(transport/transporter/serial_transporter)
+        add_subdirectory(transport/transporter/direct_transporter)
         install(EXPORT pons-targets
                 FILE pons-targets.cmake
                 NAMESPACE pons::
