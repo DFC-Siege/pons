@@ -28,6 +28,11 @@ result::Result<bool> SerialHal::send(Data &&data) {
                 return result::ok();
         }
 
+        const uint16_t length = static_cast<uint16_t>(data.size());
+        const uint8_t prefix[2] = {static_cast<uint8_t>(length & 0xFF),
+                                   static_cast<uint8_t>((length >> 8) & 0xFF)};
+        uart_write_bytes(UART_NUM_1, prefix, sizeof(prefix));
+
         const auto response =
             uart_write_bytes(UART_NUM_1, data.data(), data.size());
         if (response < 0) {
@@ -37,14 +42,13 @@ result::Result<bool> SerialHal::send(Data &&data) {
 
         return result::ok();
 }
-
 void SerialHal::on_receive(ReceiveCallback cb) {
         receive_callback = std::move(cb);
 }
 
 result::Result<bool> SerialHal::loop() {
-        Data data(BUF_SIZE);
-        int length = uart_read_bytes(UART_NUM_1, data.data(), BUF_SIZE, 0);
+        Data tmp(BUF_SIZE);
+        int length = uart_read_bytes(UART_NUM_1, tmp.data(), BUF_SIZE, 0);
         if (length < 0) {
                 return result::err(
                     "something went wrong while reading over serial");
@@ -54,11 +58,24 @@ result::Result<bool> SerialHal::loop() {
                 return result::ok();
         }
 
-        data.resize(length);
+        buffer.insert(buffer.end(), tmp.begin(), tmp.begin() + length);
+        while (buffer.size() >= 2) {
+                const uint16_t packet_length =
+                    static_cast<uint16_t>(buffer[0]) |
+                    (static_cast<uint16_t>(buffer[1]) << 8);
+                if (buffer.size() < 2 + packet_length) {
+                        break;
+                }
 
-        if (receive_callback) {
-                receive_callback(std::move(data));
+                Data packet(buffer.begin() + 2,
+                            buffer.begin() + 2 + packet_length);
+                buffer.erase(buffer.begin(),
+                             buffer.begin() + 2 + packet_length);
+                if (receive_callback) {
+                        receive_callback(std::move(packet));
+                }
         }
+
         return result::ok();
 }
 } // namespace serial

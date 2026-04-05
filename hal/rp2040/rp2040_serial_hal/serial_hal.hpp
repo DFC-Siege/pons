@@ -7,11 +7,10 @@
 #include "result.hpp"
 
 namespace serial {
-
 class SerialHal : public ISerialHal {
       public:
         SerialHal();
-        result::Result<bool> send(std::span<const uint8_t> data) override;
+        result::Result<bool> send(Data &&data) override;
         void on_receive(ReceiveCallback cb) override;
         result::Result<bool> loop() override;
 
@@ -21,6 +20,6 @@ class SerialHal : public ISerialHal {
         static constexpr auto RX_PIN = 9;
         static constexpr auto BUF_SIZE = 1024;
         ReceiveCallback receive_callback;
+        Data buffer;
 };
-
 } // namespace serial

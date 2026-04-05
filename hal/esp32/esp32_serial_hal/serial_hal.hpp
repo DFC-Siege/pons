@@ -22,5 +22,6 @@ class SerialHal : public ISerialHal {
         static constexpr auto RX_PIN = 6;
         static constexpr auto BUF_SIZE = 1024;
         ReceiveCallback receive_callback;
+        Data buffer;
 };
 } // namespace serial
