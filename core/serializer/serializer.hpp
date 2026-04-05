@@ -7,17 +7,20 @@
 #include "result.hpp"
 
 namespace serializer {
-using Data = std::vector<uint8_t>;
+using Unit = uint8_t;
+using Data = std::vector<Unit>;
+using DataView = std::span<const Unit>;
+
 struct Writer {
         Data buf;
         template <typename T> void write(const T &v) {
-                auto *p = reinterpret_cast<const uint8_t *>(&v);
+                auto *p = reinterpret_cast<const Unit *>(&v);
                 buf.insert(buf.end(), p, p + sizeof(T));
         }
 };
 
 struct Reader {
-        std::span<const uint8_t> buf;
+        DataView buf;
         size_t pos = 0;
         template <typename T> result::Result<T> read() {
                 if (pos + sizeof(T) > buf.size()) {
@@ -31,7 +34,7 @@ struct Reader {
 };
 
 template <typename T>
-concept Serializable = requires(T t, std::span<const uint8_t> buf) {
+concept Serializable = requires(T t, DataView buf) {
         { t.serialize() } -> std::same_as<Data>;
         { T::deserialize(buf) } -> std::same_as<result::Result<T>>;
 };

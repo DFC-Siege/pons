@@ -13,7 +13,7 @@ struct Point {
                 return std::move(w.buf);
         }
 
-        static result::Result<Point> deserialize(std::span<const uint8_t> buf) {
+        static result::Result<Point> deserialize(serializer::DataView buf) {
                 serializer::Reader r{buf};
                 const auto x = r.read<uint32_t>();
                 if (x.failed())
@@ -66,7 +66,7 @@ TEST_CASE("writer accumulates multiple writes") {
 }
 
 TEST_CASE("reader fails on out of bounds read") {
-        const std::vector<uint8_t> buf = {0x01};
+        const serializer::Data buf = {0x01};
         serializer::Reader r{buf};
         const auto result = r.read<uint32_t>();
         REQUIRE(result.failed());
