@@ -32,11 +32,13 @@ struct MockTransporter {
 };
 
 TEST_CASE("Dispatcher send wraps and forwards data") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         Data data = {0xAA, 0xBB};
-        const auto result = dispatcher.send(0x0001, std::move(data));
+        const auto result = dispatcher.send(0x0000, 0x0001, std::move(data));
 
         REQUIRE(!result.failed());
         REQUIRE(mock.sent.size() == 1);
@@ -48,8 +50,10 @@ TEST_CASE("Dispatcher send wraps and forwards data") {
 }
 
 TEST_CASE("Dispatcher receive dispatches to registered handler") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         std::optional<Data> received;
         dispatcher.register_handler(0x0001, [&](result::Result<Data> result) {
@@ -65,29 +69,37 @@ TEST_CASE("Dispatcher receive dispatches to registered handler") {
 }
 
 TEST_CASE("Dispatcher receive with no handler does not crash") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         REQUIRE_NOTHROW(mock.deliver({0x01, 0x00, 0xAA, 0xBB}));
 }
 
 TEST_CASE("Dispatcher receive with data too small does not crash") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         REQUIRE_NOTHROW(mock.deliver({0x01}));
 }
 
 TEST_CASE("Dispatcher receive with empty data does not crash") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         REQUIRE_NOTHROW(mock.deliver({}));
 }
 
 TEST_CASE("Dispatcher register_handler replaces existing handler") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         int call_count = 0;
         dispatcher.register_handler(
@@ -101,8 +113,10 @@ TEST_CASE("Dispatcher register_handler replaces existing handler") {
 }
 
 TEST_CASE("Dispatcher dispatches to correct handler by command id") {
-        MockTransporter mock;
-        Dispatcher<MockTransporter> dispatcher(mock);
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned = std::make_unique<MockTransporter>();
+        auto &mock = *owned;
+        dispatcher.register_transporter(0x0000, std::move(owned));
 
         std::optional<Data> received_a;
         std::optional<Data> received_b;
