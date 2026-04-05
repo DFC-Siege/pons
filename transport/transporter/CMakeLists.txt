@@ -17,12 +17,6 @@ else()
                 DESTINATION include/pons
                 FILES_MATCHING PATTERN "*.hpp"
         )
-
-        if(PLATFORM STREQUAL "rp2040")
-                target_link_libraries(dispatcher INTERFACE pico_sync pico_standard_link)
-                target_compile_definitions(dispatcher INTERFACE PICO_MUTEX_ENABLE_STD_MUTEX=1)
-        endif()
-
         if(PLATFORM STREQUAL "posix")
                 add_executable(multiplexer_test multiplexer_test.cpp)
                 target_link_libraries(multiplexer_test PRIVATE Catch2::Catch2WithMain transporter)

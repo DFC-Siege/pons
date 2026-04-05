@@ -29,6 +29,5 @@ class SerialHal : public ISerialHal {
         Pin rx_pin;
         ReceiveCallback receive_callback;
         Data buffer;
-        Data tmp;
 };
 } // namespace serial
