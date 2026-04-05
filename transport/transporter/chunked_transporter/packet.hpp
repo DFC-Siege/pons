@@ -171,8 +171,8 @@ struct Chunk : public Packet {
                 return result::ok(std::move(data));
         }
 
-        static result::Result<std::vector<Chunk>> fragment(const Data &data,
-                                                           MTU raw_mtu) {
+        static result::Result<std::vector<Chunk>>
+        fragment(const Data &data, MTU raw_mtu, SessionId session_id) {
                 if (data.empty())
                         return result::err("empty data");
                 if (raw_mtu <= HEADER_SIZE)
@@ -191,6 +191,7 @@ struct Chunk : public Packet {
                         const size_t current_payload_size =
                             std::min(max_payload, total_size - offset);
                         Chunk chunk;
+                        chunk.session_id = session_id;
                         chunk.index = i;
                         chunk.total_chunks = total_chunks;
                         chunk.payload.assign(data.begin() + offset,

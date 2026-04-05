@@ -35,9 +35,15 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 Data packet;
                 {
                         std::scoped_lock lock(egress_mutex);
+                        const auto session_result =
+                            generate_session_id(egress_map, next_session_id);
+                        if (session_result.failed()) {
+                                return result::err(session_result.error());
+                        }
+                        next_session_id = session_result.value();
 
-                        const auto result =
-                            Chunk::fragment(data, transporter.get_mtu());
+                        const auto result = Chunk::fragment(
+                            data, transporter.get_mtu(), next_session_id);
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -56,12 +62,6 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                             "fragmented into " + std::to_string(chunks.size()) +
                                 " chunks");
 
-                        const auto session_result =
-                            generate_session_id(egress_map, next_session_id);
-                        if (session_result.failed()) {
-                                return result::err(session_result.error());
-                        }
-                        next_session_id = session_result.value();
                         logging::logger().println(
                             logging::LogLevel::Debug, TAG,
                             "session id: " + std::to_string(next_session_id));
