@@ -37,7 +37,7 @@ template <Transporter T> class Multiplexer {
                     : parent(parent), id(id) {
                 }
 
-                result::Result<bool> send(Data &&data) override {
+                result::Status send(Data &&data) override {
                         return parent.send_with_id(id, std::move(data));
                 }
 
@@ -78,7 +78,7 @@ template <Transporter T> class Multiplexer {
             inner_channels;
         std::mutex mutex;
 
-        result::Result<bool> send_with_id(TransporterId id, Data &&data) {
+        result::Status send_with_id(TransporterId id, Data &&data) {
                 {
                         const std::scoped_lock lock(mutex);
                         if (inner_channels.find(id) == inner_channels.end()) {

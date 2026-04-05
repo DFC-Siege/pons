@@ -16,7 +16,7 @@ SerialHal::SerialHal() {
         uart_set_fifo_enabled(uart1, true);
 }
 
-result::Result<bool> SerialHal::send(Data &&data) {
+result::Status SerialHal::send(Data &&data) {
         if (data.empty())
                 return result::ok();
         const uint16_t length = static_cast<uint16_t>(data.size());
@@ -31,7 +31,7 @@ void SerialHal::on_receive(ReceiveCallback cb) {
         receive_callback = std::move(cb);
 }
 
-result::Result<bool> SerialHal::loop() {
+result::Status SerialHal::loop() {
         while (uart_is_readable(uart1)) {
                 const auto c = uart_getc(uart1);
                 buffer.push_back(static_cast<uint8_t>(c));

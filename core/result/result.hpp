@@ -78,6 +78,8 @@ struct Error {
         }
 };
 
+using Status = Result<bool>;
+
 inline Error err(std::string_view message) {
         return {std::string(message)};
 }

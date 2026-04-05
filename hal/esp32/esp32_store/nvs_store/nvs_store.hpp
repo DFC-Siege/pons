@@ -12,7 +12,7 @@ class NvsStore : public IStore {
       public:
         static result::Result<NvsStore> init(std::string_view ns);
 
-        result::Result<bool> store(std::string_view key,
+        result::Status store(std::string_view key,
                                    std::string_view value) override;
 
         result::Result<std::string> get(std::string_view key) override;
@@ -26,8 +26,8 @@ class NvsStore : public IStore {
         NvsStore(std::string_view ns);
         static void assert_initialized();
 
-        result::Result<bool> try_open();
-        static result::Result<bool> try_init(int count = 0);
+        result::Status try_open();
+        static result::Status try_init(int count = 0);
 };
 } // namespace kv
 } // namespace store

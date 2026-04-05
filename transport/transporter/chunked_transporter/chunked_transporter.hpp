@@ -29,7 +29,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 });
         };
 
-        result::Result<bool> send(Data &&data) override {
+        result::Status send(Data &&data) override {
                 logging::logger().println(logging::LogLevel::Debug, TAG,
                                           "send called, payload size: " +
                                               std::to_string(data.size()));

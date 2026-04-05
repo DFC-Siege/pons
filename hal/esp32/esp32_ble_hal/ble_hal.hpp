@@ -20,7 +20,7 @@ class BleHal : public IBleHal {
 
         void begin(std::string_view device_name);
 
-        result::Result<bool> send(std::span<const uint8_t> data) override;
+        result::Status send(std::span<const uint8_t> data) override;
         void on_receive(ReceiveCallback cb) override {
                 receive_callback = std::move(cb);
         }

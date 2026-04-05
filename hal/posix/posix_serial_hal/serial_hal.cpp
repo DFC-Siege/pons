@@ -29,7 +29,7 @@ SerialHal::~SerialHal() {
                 close(fd);
 }
 
-result::Result<bool> SerialHal::send(Data &&data) {
+result::Status SerialHal::send(Data &&data) {
         const uint16_t length = static_cast<uint16_t>(data.size());
         const uint8_t prefix[LENGTH_PREFIX_SIZE] = {
             static_cast<uint8_t>(length & 0xFF),
@@ -45,7 +45,7 @@ void SerialHal::on_receive(ReceiveCallback cb) {
         receive_callback = std::move(cb);
 }
 
-result::Result<bool> SerialHal::loop() {
+result::Status SerialHal::loop() {
         uint8_t tmp[BUF_SIZE];
         const auto length = read(fd, tmp, BUF_SIZE);
         if (length < 0)
