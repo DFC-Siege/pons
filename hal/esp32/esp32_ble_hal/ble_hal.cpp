@@ -21,6 +21,7 @@ const ble_gatt_svc_def BleHal::gatt_services[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = &service_uuid.u,
+        .includes = nullptr,
         .characteristics =
             (ble_gatt_chr_def[]){
                 {
@@ -29,6 +30,9 @@ const ble_gatt_svc_def BleHal::gatt_services[] = {
                     .arg = nullptr,
                     .descriptors = nullptr,
                     .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+                    .min_key_size = 0,
+                    .val_handle = nullptr,
+                    .cpfd = nullptr,
                 },
                 {
                     .uuid = &tx_uuid.u,
@@ -36,12 +40,28 @@ const ble_gatt_svc_def BleHal::gatt_services[] = {
                     .arg = nullptr,
                     .descriptors = nullptr,
                     .flags = BLE_GATT_CHR_F_NOTIFY,
+                    .min_key_size = 0,
                     .val_handle = &tx_attr_handle,
+                    .cpfd = nullptr,
                 },
-                {0},
+                {
+                    .uuid = nullptr,
+                    .access_cb = nullptr,
+                    .arg = nullptr,
+                    .descriptors = nullptr,
+                    .flags = 0,
+                    .min_key_size = 0,
+                    .val_handle = nullptr,
+                    .cpfd = nullptr,
+                },
             },
     },
-    {0},
+    {
+        .type = 0,
+        .uuid = nullptr,
+        .includes = nullptr,
+        .characteristics = nullptr,
+    },
 };
 
 void BleHal::begin(std::string_view device_name) {

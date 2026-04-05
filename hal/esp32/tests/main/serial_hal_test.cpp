@@ -1,8 +1,6 @@
 #include "serial_hal_test.hpp"
 #include "serial_hal.hpp"
 #include <driver/uart.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <hal/uart_types.h>
 #include <unity.h>
 
@@ -14,8 +12,7 @@ static void test_constructor_does_not_crash() {
 }
 
 static void test_send_returns_ok() {
-        const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
-        const auto result = hal->send(data);
+        const auto result = hal->send({0x01, 0x02, 0x03});
         TEST_ASSERT_FALSE(result.failed());
 }
 

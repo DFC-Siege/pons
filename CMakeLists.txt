@@ -3,14 +3,11 @@ set(PLATFORM "posix" CACHE STRING "Target platform (esp32, stm32, posix, rp2040)
 if(ESP_PLATFORM)
         set(EXTRA_COMPONENT_DIRS
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/result
-                ${CMAKE_CURRENT_SOURCE_DIR}/core/core_async
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/logger
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
-                ${CMAKE_CURRENT_SOURCE_DIR}/hal/esp32/esp32_async
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/http_client
-                ${CMAKE_CURRENT_SOURCE_DIR}/platform/${PLATFORM}/platform_async
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/store
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/dispatcher
@@ -30,14 +27,11 @@ elseif(PLATFORM STREQUAL "rp2040")
         pico_sdk_init()
         add_compile_options(-Wno-free-nonheap-object)
         add_subdirectory(core/result)
-        add_subdirectory(core/core_async)
         add_subdirectory(core/logger)
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)
         add_subdirectory(hal/store)
-        add_subdirectory(hal/rp2040/rp2040_async)
         add_subdirectory(hal/rp2040/rp2040_serial_hal)
-        add_subdirectory(platform/rp2040/platform_async)
         add_subdirectory(transport)
         add_subdirectory(transport/dispatcher)
         add_subdirectory(transport/transporter)
@@ -60,16 +54,12 @@ else()
         enable_testing()
         set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Install prefix")
         add_subdirectory(core/result)
-        add_subdirectory(core/core_async)
         add_subdirectory(core/logger)
         add_subdirectory(core/logger/console_logger)
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)
         add_subdirectory(hal/http_client)
         add_subdirectory(hal/store)
-        add_subdirectory(hal/${PLATFORM}/${PLATFORM}_async)
-        add_subdirectory(hal/${PLATFORM}/${PLATFORM}_serial_hal)
-        add_subdirectory(platform/${PLATFORM}/platform_async)
         add_subdirectory(transport)
         add_subdirectory(transport/dispatcher)
         add_subdirectory(transport/transporter)

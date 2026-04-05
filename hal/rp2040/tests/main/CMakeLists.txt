@@ -1,13 +1,10 @@
 add_executable(rp2040_hal_tests
         main.cpp
-        semaphore_test.cpp
         serial_hal_test.cpp
 )
 
 target_link_libraries(rp2040_hal_tests PRIVATE
-        rp2040_async
         rp2040_serial_hal
-        core_async
         result
         serial_hal
         pico_stdlib
