@@ -67,6 +67,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                             logging::LogLevel::Debug, TAG,
                             "session id: " + std::to_string(next_session_id));
                         egress_map[next_session_id] = std::move(chunks);
+                        egress_tries[next_session_id] = 0;
 
                         packet = egress_map[next_session_id].at(0).to_buf();
                 }
@@ -88,6 +89,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
         static constexpr auto TAG = "ChunkedTransporter";
         T &transporter;
         std::unordered_map<SessionId, std::vector<Chunk>> egress_map;
+        std::unordered_map<SessionId, uint16_t> egress_tries;
         std::unordered_map<SessionId, std::vector<Chunk>> ingress_map;
         uint16_t max_tries = 0;
         SessionId next_session_id = 0;
@@ -224,6 +226,8 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
+                egress_tries[ack.session_id] = 0;
+
                 const uint16_t total_chunks = chunks[ack.index].total_chunks;
                 if (ack.index >= total_chunks - 1) {
                         logging::logger().println(
@@ -278,6 +282,18 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                 if (nack.index >= chunks.size()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   "nack index out of bounds");
+                        return defered_function;
+                }
+
+                auto &tries = egress_tries[nack.session_id];
+                ++tries;
+
+                if (tries >= max_tries) {
+                        logging::logger().println(
+                            logging::LogLevel::Error, TAG,
+                            "max tries reached for session: " +
+                                std::to_string(nack.session_id));
+                        handle_done_sending(nack.session_id);
                         return defered_function;
                 }
 
@@ -407,6 +423,7 @@ template <Transporter T> class ChunkedTransporter : public BaseTransporter {
                                           "done sending session: " +
                                               std::to_string(id));
                 egress_map.erase(id);
+                egress_tries.erase(id);
         }
 
         std::function<void()>
