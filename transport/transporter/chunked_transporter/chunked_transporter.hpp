@@ -360,18 +360,6 @@ class ChunkedTransporter : public BaseTransporter {
                             "unexpected chunk index, expected: " +
                                 std::to_string(expected_index) +
                                 " got: " + std::to_string(chunk.index));
-
-                        const auto it = ingress_map.find(chunk.session_id);
-                        if (chunk.index == 0 && it == ingress_map.end()) {
-                                logging::logger().println(
-                                    logging::LogLevel::Error, TAG,
-                                    "unexpected chunk index of non existent "
-                                    "session:" +
-                                        std::to_string(expected_index) +
-                                        " got: " + std::to_string(chunk.index));
-                                return defered_function;
-                        }
-
                         return
                             [this, sid = chunk.session_id, expected_index]() {
                                     this->send_nack(sid, expected_index);
