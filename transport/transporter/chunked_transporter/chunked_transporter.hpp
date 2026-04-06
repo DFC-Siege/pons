@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <functional>
@@ -45,7 +46,7 @@ class ChunkedTransporter : public BaseTransporter {
                                               std::to_string(data.size()));
                 Data packet;
                 {
-                        std::lock_guard<M> lock(egress_mutex);
+                        std::scoped_lock lock(egress_mutex, ingress_mutex);
                         remove_stale();
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
@@ -73,10 +74,10 @@ class ChunkedTransporter : public BaseTransporter {
                             logging::LogLevel::Debug, TAG,
                             "fragmented into " + std::to_string(chunks.size()) +
                                 " chunks");
-
                         logging::logger().println(
                             logging::LogLevel::Debug, TAG,
                             "session id: " + std::to_string(next_session_id));
+
                         auto &session = egress_map[next_session_id];
                         session.chunks = std::move(chunks);
                         session.tries = 0;
@@ -91,6 +92,7 @@ class ChunkedTransporter : public BaseTransporter {
                 logging::logger().println(logging::LogLevel::Debug, TAG,
                                           "sending first chunk, size: " +
                                               std::to_string(packet.size()));
+
                 return transporter.send(std::move(packet));
         }
 
@@ -144,10 +146,9 @@ class ChunkedTransporter : public BaseTransporter {
                                                   type_result.error());
                         return;
                 }
-
                 std::function<void()> defer;
                 {
-                        std::lock_guard<M> lock(ingress_mutex);
+                        std::scoped_lock lock(ingress_mutex, egress_mutex);
                         remove_stale();
                         switch (type_result.value()) {
                         case PacketType::ack:
@@ -170,7 +171,6 @@ class ChunkedTransporter : public BaseTransporter {
                                 break;
                         }
                 }
-
                 if (defer) {
                         defer();
                 }
@@ -264,7 +264,8 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto next_index = ack.index + 1;
 
                 return [this, sid, next_index]() {
-                        std::lock_guard<M> lock(this->egress_mutex);
+                        std::scoped_lock lock(this->egress_mutex,
+                                              this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
                         auto &session = it->second;
                         if (it != this->egress_map.end() &&
@@ -326,7 +327,8 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto retry_index = nack.index;
 
                 return [this, sid, retry_index]() {
-                        std::lock_guard<M> lock(this->egress_mutex);
+                        std::scoped_lock lock(this->egress_mutex,
+                                              this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
                         auto &session = it->second;
                         if (it != this->egress_map.end() &&
@@ -506,31 +508,28 @@ class ChunkedTransporter : public BaseTransporter {
         }
 
         void remove_stale() {
+                if (timeout == 0) {
+                        return;
+                }
+
                 const auto now =
                     std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now().time_since_epoch())
                         .count();
-                std::vector<SessionId> to_remove_egress;
-                std::vector<SessionId> to_remove_ingress;
-                for (const auto &[id, session] : egress_map) {
-                        if (now - session.timestamp > timeout) {
-                                to_remove_egress.push_back(id);
-                        }
-                }
 
-                for (const auto &[id, session] : ingress_map) {
-                        if (now - session.timestamp > timeout) {
-                                to_remove_ingress.push_back(id);
-                        }
-                }
+                auto prune =
+                    [&](std::unordered_map<SessionId, SessionWrapper> &map) {
+                            for (auto it = map.begin(); it != map.end();) {
+                                    if (now - it->second.timestamp > timeout) {
+                                            it = map.erase(it);
+                                    } else {
+                                            ++it;
+                                    }
+                            }
+                    };
 
-                for (const auto &id : to_remove_egress) {
-                        egress_map.erase(id);
-                }
-
-                for (const auto &id : to_remove_ingress) {
-                        ingress_map.erase(id);
-                }
+                prune(egress_map);
+                prune(ingress_map);
         }
 };
 
