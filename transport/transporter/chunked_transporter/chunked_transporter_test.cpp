@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "chunked_transporter.hpp"
@@ -300,4 +301,68 @@ TEST_CASE("ChunkedTransporter send can reuse session id after completion") {
 
         const auto result = ct.send(Data(payload));
         REQUIRE(!result.failed());
+}
+
+TEST_CASE("ChunkedTransporter prunes stale egress session on timeout") {
+        MockTransporter mock;
+        mock.mtu = 16;
+        const uint16_t timeout_ms = 50;
+        ChunkedTransporter<MockTransporter> ct(mock, 3, timeout_ms);
+
+        const Data payload(40, 0xAA);
+        ct.send(Data(payload));
+        REQUIRE(mock.sent.size() == 1);
+        const auto sid = extract_session_id(mock.sent.front());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms + 10));
+
+        ct.send({0x01});
+
+        mock.sent.clear();
+        mock.deliver(make_ack(sid, 0).to_buf());
+
+        REQUIRE(mock.sent.empty());
+}
+
+TEST_CASE("ChunkedTransporter prunes stale ingress session on timeout") {
+        MockTransporter mock;
+        mock.mtu = 16;
+        const uint16_t timeout_ms = 50;
+        ChunkedTransporter<MockTransporter> ct(mock, 3, timeout_ms);
+
+        ct.set_receiver([&](result::Result<Data> r) {});
+
+        const SessionId sid = 99;
+        mock.deliver(make_chunk(sid, 0, 2, {0x01, 0x02}).to_buf());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms + 10));
+
+        mock.deliver(make_chunk(100, 0, 1, {0xFF}).to_buf());
+
+        mock.sent.clear();
+        mock.deliver(make_chunk(sid, 1, 2, {0x03, 0x04}).to_buf());
+
+        REQUIRE(!mock.sent.empty());
+        const auto type_result = get_packet_type(mock.sent.back());
+        REQUIRE(type_result.value() == PacketType::nack);
+}
+
+TEST_CASE("ChunkedTransporter does not prune sessions before timeout") {
+        MockTransporter mock;
+        mock.mtu = 16;
+        const uint16_t timeout_ms = 1000;
+        ChunkedTransporter<MockTransporter> ct(mock, 3, timeout_ms);
+
+        const Data payload(40, 0xAA);
+        ct.send(Data(payload));
+        const auto sid = extract_session_id(mock.sent.front());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        mock.sent.clear();
+        mock.deliver(make_ack(sid, 0).to_buf());
+
+        REQUIRE(mock.sent.size() == 1);
+        const auto chunk_result = Chunk::from_buf(mock.sent.back());
+        REQUIRE(chunk_result.value().index == 1);
 }
