@@ -3,6 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <hal/uart_types.h>
+#include <string>
 
 #include "logger.hpp"
 #include "result.hpp"
@@ -11,6 +12,14 @@
 namespace serial {
 
 static constexpr auto TAG = "SerialHal";
+
+static std::string to_hex_string(const uint8_t *data, size_t len) {
+        std::string hex;
+        for (size_t i = 0; i < len; ++i) {
+                hex += std::to_string(data[i]) + " ";
+        }
+        return hex;
+}
 
 SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
                      Baudrate baudrate, BufferSize buffer_size)
@@ -29,6 +38,9 @@ SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
         uart_param_config(uart, &uart_config);
         uart_set_pin(uart, tx_pin, rx_pin, UART_PIN_NO_CHANGE,
                      UART_PIN_NO_CHANGE);
+
+        uart_flush_input(uart);
+
         logging::logger().println(logging::LogLevel::Debug, TAG,
                                   "initialized uart=" + std::to_string(uart) +
                                       " tx=" + std::to_string(tx_pin) +
@@ -43,14 +55,19 @@ result::Try SerialHal::send(Data &&data) {
                     "send called with empty data, skipping");
                 return result::ok();
         }
-        logging::logger().println(logging::LogLevel::Debug, TAG,
-                                  "sending " + std::to_string(data.size()) +
-                                      " bytes");
+
         const uint16_t length = static_cast<uint16_t>(data.size());
+        logging::logger().println(
+            logging::LogLevel::Debug, TAG,
+            "sending " + std::to_string(length) +
+                " bytes: " + to_hex_string(data.data(), data.size()));
+
         const uint8_t prefix[2] = {static_cast<uint8_t>(length & 0xFF),
-                                   static_cast<uint8_t>((length >> 8) & 0xFF)};
+                                static_cast<uint8_t>((length >> 8) & 0xFF)};
+
         uart_write_bytes(uart, prefix, sizeof(prefix));
         const auto response = uart_write_bytes(uart, data.data(), data.size());
+
         if (response < 0) {
                 logging::logger().println(logging::LogLevel::Error, TAG,
                                           "uart_write_bytes failed with " +
@@ -58,9 +75,7 @@ result::Try SerialHal::send(Data &&data) {
                 return result::err(
                     "something went wrong while sending over serial");
         }
-        logging::logger().println(logging::LogLevel::Debug, TAG,
-                                  "sent " + std::to_string(response) +
-                                      " bytes");
+
         return result::ok();
 }
 
@@ -75,58 +90,57 @@ result::Try SerialHal::loop() {
         if (xQueueReceive(event_queue, &event, pdMS_TO_TICKS(10)) != pdTRUE) {
                 return result::ok();
         }
-        logging::logger().println(
-            logging::LogLevel::Debug, TAG,
-            "uart event type=" + std::to_string(event.type) +
-                " size=" + std::to_string(event.size));
+
         if (event.type != UART_DATA) {
-                logging::logger().println(logging::LogLevel::Debug, TAG,
-                                          "ignoring non-data event");
                 return result::ok();
         }
+
         const int length = uart_read_bytes(uart, tmp.data(), event.size, 0);
         if (length < 0) {
                 logging::logger().println(logging::LogLevel::Error, TAG,
-                                          "uart_read_bytes failed with " +
-                                              std::to_string(length));
-                return result::err(
-                    "something went wrong while reading over serial");
+                                          "uart_read_bytes failed");
+                return result::err("read error");
         }
-        logging::logger().println(logging::LogLevel::Debug, TAG,
-                                  "read " + std::to_string(length) +
-                                      " bytes, buffer size=" +
-                                      std::to_string(buffer.size() + length));
+
         buffer.insert(buffer.end(), tmp.begin(), tmp.begin() + length);
+
         size_t consumed = 0;
         while (buffer.size() - consumed >= 2) {
                 const uint16_t packet_length =
                     static_cast<uint16_t>(buffer[consumed]) |
                     (static_cast<uint16_t>(buffer[consumed + 1]) << 8);
-                if (buffer.size() - consumed < 2 + packet_length) {
+
+                if (packet_length > 512 || packet_length == 0) {
                         logging::logger().println(
-                            logging::LogLevel::Debug, TAG,
-                            "incomplete packet, expected=" +
-                                std::to_string(packet_length) + " available=" +
-                                std::to_string(buffer.size() - consumed - 2));
+                            logging::LogLevel::Error, TAG,
+                            "desync! garbage length=" +
+                                std::to_string(packet_length));
+                        consumed++;
+                        continue;
+                }
+
+                if (buffer.size() - consumed < 2 + packet_length) {
                         break;
                 }
+
                 logging::logger().println(logging::LogLevel::Debug, TAG,
                                           "dispatching packet length=" +
                                               std::to_string(packet_length));
+
                 Data packet(buffer.begin() + consumed + 2,
                             buffer.begin() + consumed + 2 + packet_length);
+
                 consumed += 2 + packet_length;
+
                 if (receive_callback) {
                         receive_callback(std::move(packet));
                 }
         }
+
         if (consumed > 0) {
-                logging::logger().println(logging::LogLevel::Debug, TAG,
-                                          "consumed " +
-                                              std::to_string(consumed) +
-                                              " bytes from buffer");
                 buffer.erase(buffer.begin(), buffer.begin() + consumed);
         }
+
         return result::ok();
 }
 
