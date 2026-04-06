@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <mutex>
@@ -16,11 +17,17 @@
 #include "transporter/transporter.hpp"
 
 namespace transport {
+struct SessionWrapper {
+        std::vector<Chunk> chunks;
+        uint16_t tries;
+        long long timestamp;
+};
+
 template <Transporter T, locking::Mutex M = DefaultMutex>
 class ChunkedTransporter : public BaseTransporter {
       public:
-        ChunkedTransporter(T &transporter, uint16_t max_tries)
-            : transporter(transporter), max_tries(max_tries) {
+        ChunkedTransporter(T &transporter, uint16_t max_tries, uint16_t timeout)
+            : transporter(transporter), max_tries(max_tries), timeout(timeout) {
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
@@ -69,10 +76,15 @@ class ChunkedTransporter : public BaseTransporter {
                         logging::logger().println(
                             logging::LogLevel::Debug, TAG,
                             "session id: " + std::to_string(next_session_id));
-                        egress_map[next_session_id] = std::move(chunks);
-                        egress_tries[next_session_id] = 0;
-
-                        packet = egress_map[next_session_id].at(0).to_buf();
+                        auto &session = egress_map[next_session_id];
+                        session.chunks = std::move(chunks);
+                        session.tries = 0;
+                        session.timestamp = std::chrono::duration_cast<
+                                                std::chrono::milliseconds>(
+                                                std::chrono::steady_clock::now()
+                                                    .time_since_epoch())
+                                                .count();
+                        packet = session.chunks.at(0).to_buf();
                 }
 
                 logging::logger().println(logging::LogLevel::Debug, TAG,
@@ -91,18 +103,18 @@ class ChunkedTransporter : public BaseTransporter {
       private:
         static constexpr auto TAG = "ChunkedTransporter";
         T &transporter;
-        std::unordered_map<SessionId, std::vector<Chunk>> egress_map;
-        std::unordered_map<SessionId, uint16_t> egress_tries;
-        std::unordered_map<SessionId, std::vector<Chunk>> ingress_map;
+        std::unordered_map<SessionId, SessionWrapper> egress_map;
+        std::unordered_map<SessionId, SessionWrapper> ingress_map;
         uint16_t max_tries = 0;
+        uint16_t timeout = 0;
         SessionId next_session_id = 0;
         M egress_mutex;
         M ingress_mutex;
 
         result::Result<SessionId> generate_session_id(
-            const std::unordered_map<SessionId, std::vector<Chunk>> &chunks,
+            const std::unordered_map<SessionId, SessionWrapper> &sessions,
             const SessionId next_session_id) const {
-                if (chunks.size() >= std::numeric_limits<SessionId>::max()) {
+                if (sessions.size() >= std::numeric_limits<SessionId>::max()) {
                         return result::err(
                             "maximum concurrent sessions reached");
                 }
@@ -110,7 +122,7 @@ class ChunkedTransporter : public BaseTransporter {
                 SessionId candidate = next_session_id;
                 const SessionId start_search = candidate;
 
-                while (chunks.find(candidate) != chunks.end()) {
+                while (sessions.find(candidate) != sessions.end()) {
                         candidate++;
                         if (candidate == start_search) {
                                 return result::err(
@@ -215,7 +227,8 @@ class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
-                const auto &chunks = it->second;
+                auto &session = it->second;
+                const auto &chunks = session.chunks;
                 if (chunks.empty()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   "chunks are empty");
@@ -229,8 +242,11 @@ class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
-                egress_tries[ack.session_id] = 0;
-
+                session.tries = 0;
+                session.timestamp =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
                 const uint16_t total_chunks = chunks[ack.index].total_chunks;
                 if (ack.index >= total_chunks - 1) {
                         logging::logger().println(
@@ -248,10 +264,11 @@ class ChunkedTransporter : public BaseTransporter {
                 return [this, sid, next_index]() {
                         std::lock_guard<M> lock(this->egress_mutex);
                         auto it = this->egress_map.find(sid);
+                        auto &session = it->second;
                         if (it != this->egress_map.end() &&
-                            next_index < it->second.size()) {
+                            next_index < session.chunks.size()) {
                                 auto packet =
-                                    it->second.at(next_index).to_buf();
+                                    session.chunks.at(next_index).to_buf();
                                 this->transporter.send(std::move(packet));
                         }
                 };
@@ -281,17 +298,16 @@ class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
-                const auto &chunks = it->second;
+                auto &session = it->second;
+                const auto &chunks = session.chunks;
                 if (nack.index >= chunks.size()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   "nack index out of bounds");
                         return defered_function;
                 }
 
-                auto &tries = egress_tries[nack.session_id];
-                ++tries;
-
-                if (tries >= max_tries) {
+                ++session.tries;
+                if (session.tries >= max_tries) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
                             "max tries reached for session: " +
@@ -306,10 +322,11 @@ class ChunkedTransporter : public BaseTransporter {
                 return [this, sid, retry_index]() {
                         std::lock_guard<M> lock(this->egress_mutex);
                         auto it = this->egress_map.find(sid);
+                        auto &session = it->second;
                         if (it != this->egress_map.end() &&
-                            retry_index < it->second.size()) {
+                            retry_index < session.chunks.size()) {
                                 auto packet =
-                                    it->second.at(retry_index).to_buf();
+                                    session.chunks.at(retry_index).to_buf();
                                 this->transporter.send(std::move(packet));
                         }
                 };
@@ -357,14 +374,22 @@ class ChunkedTransporter : public BaseTransporter {
                         std::vector<Chunk> chunks;
                         chunks.resize(total_chunks);
                         chunks[chunk_index] = std::move(chunk);
-                        ingress_map[sid] = std::move(chunks);
+                        auto &session = ingress_map[sid];
+                        session.chunks = std::move(chunks);
+                        session.tries = 0;
+                        session.timestamp = std::chrono::duration_cast<
+                                                std::chrono::milliseconds>(
+                                                std::chrono::steady_clock::now()
+                                                    .time_since_epoch())
+                                                .count();
 
                         if (chunk_index == total_chunks - 1) {
                                 logging::logger().println(
                                     logging::LogLevel::Debug, TAG,
                                     "last chunk received, assembling");
                                 return handle_done_receiving(
-                                    result::ok(std::move(ingress_map[sid])),
+                                    result::ok(
+                                        std::move(ingress_map[sid].chunks)),
                                     sid, total_chunks, chunk_index);
                         }
 
@@ -373,7 +398,7 @@ class ChunkedTransporter : public BaseTransporter {
                         };
                 }
 
-                auto &chunks = it->second;
+                auto &chunks = it->second.chunks;
                 if (chunk_index >= chunks.size()) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
@@ -406,7 +431,7 @@ class ChunkedTransporter : public BaseTransporter {
                         return 0;
                 }
 
-                const auto &chunks = it->second;
+                const auto &chunks = it->second.chunks;
                 if (chunks.empty()) {
                         return 0;
                 }
@@ -426,7 +451,6 @@ class ChunkedTransporter : public BaseTransporter {
                                           "done sending session: " +
                                               std::to_string(id));
                 egress_map.erase(id);
-                egress_tries.erase(id);
         }
 
         std::function<void()>

@@ -54,7 +54,7 @@ static Nack make_nack(SessionId session_id, Indexer index) {
 
 TEST_CASE("ChunkedTransporter send fragments data into chunks") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         const Data payload(100, 0xAB);
         const auto result = ct.send(Data(payload));
         REQUIRE(!result.failed());
@@ -63,13 +63,13 @@ TEST_CASE("ChunkedTransporter send fragments data into chunks") {
 
 TEST_CASE("ChunkedTransporter get_mtu subtracts header size") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         REQUIRE(ct.get_mtu() == mock.mtu - Chunk::HEADER_SIZE);
 }
 
 TEST_CASE("ChunkedTransporter send returns error on empty data") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         const auto result = ct.send({});
         REQUIRE(result.failed());
 }
@@ -77,7 +77,7 @@ TEST_CASE("ChunkedTransporter send returns error on empty data") {
 TEST_CASE("ChunkedTransporter receives and reassembles single chunk") {
         MockTransporter mock;
         std::optional<Data> received;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
                         received = r.value();
@@ -90,7 +90,7 @@ TEST_CASE("ChunkedTransporter receives and reassembles single chunk") {
 
 TEST_CASE("ChunkedTransporter sends ack on receiving valid chunk") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([](result::Result<Data>) {});
         mock.deliver(make_chunk(2, 0, 1, {0xDE, 0xAD}).to_buf());
         REQUIRE(!mock.sent.empty());
@@ -101,7 +101,7 @@ TEST_CASE("ChunkedTransporter sends ack on receiving valid chunk") {
 
 TEST_CASE("ChunkedTransporter sends nack on out of order chunk") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([](result::Result<Data>) {});
         mock.deliver(make_chunk(3, 1, 2, {0x01}).to_buf());
         REQUIRE(!mock.sent.empty());
@@ -114,7 +114,7 @@ TEST_CASE("ChunkedTransporter reassembles multi-chunk message") {
         MockTransporter mock;
         mock.mtu = 16;
         std::optional<Data> received;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
                         received = r.value();
@@ -142,7 +142,7 @@ static SessionId extract_session_id(const Data &buf) {
 TEST_CASE("ChunkedTransporter send triggers chunk-by-chunk flow via ack") {
         MockTransporter mock;
         mock.mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
 
         const Data payload(40, 0xCC);
         ct.send(Data(payload));
@@ -160,7 +160,7 @@ TEST_CASE("ChunkedTransporter send triggers chunk-by-chunk flow via ack") {
 TEST_CASE("ChunkedTransporter retries chunk on nack") {
         MockTransporter mock;
         mock.mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
 
         const Data payload(40, 0xBB);
         ct.send(Data(payload));
@@ -180,7 +180,7 @@ TEST_CASE("ChunkedTransporter drops session after max_tries nacks") {
         MockTransporter mock;
         mock.mtu = 16;
         const uint16_t max_tries = 3;
-        ChunkedTransporter<MockTransporter> ct(mock, max_tries);
+        ChunkedTransporter<MockTransporter> ct(mock, max_tries, 1000);
 
         const Data payload(40, 0xBB);
         ct.send(Data(payload));
@@ -200,7 +200,7 @@ TEST_CASE("ChunkedTransporter resets tries to zero on ack after nack") {
         MockTransporter mock;
         mock.mtu = 16;
         const uint16_t max_tries = 3;
-        ChunkedTransporter<MockTransporter> ct(mock, max_tries);
+        ChunkedTransporter<MockTransporter> ct(mock, max_tries, 1000);
 
         const Data payload(40, 0xBB);
         ct.send(Data(payload));
@@ -224,7 +224,7 @@ TEST_CASE("ChunkedTransporter concurrent sessions are independent") {
         MockTransporter mock;
         mock.mtu = 16;
         std::vector<Data> received;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
                         received.push_back(r.value());
@@ -243,7 +243,7 @@ TEST_CASE("ChunkedTransporter concurrent sessions are independent") {
 
 TEST_CASE("ChunkedTransporter nack for duplicate chunk index") {
         MockTransporter mock;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
         ct.set_receiver([](result::Result<Data>) {});
 
         mock.deliver(make_chunk(5, 0, 3, {0x01}).to_buf());
@@ -259,7 +259,7 @@ TEST_CASE("ChunkedTransporter nack for duplicate chunk index") {
 TEST_CASE("ChunkedTransporter session is cleaned up after full send") {
         MockTransporter mock;
         mock.mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
 
         const Data payload(10, 0x11);
         ct.send(Data(payload));
@@ -283,7 +283,7 @@ TEST_CASE("ChunkedTransporter session is cleaned up after full send") {
 TEST_CASE("ChunkedTransporter send can reuse session id after completion") {
         MockTransporter mock;
         mock.mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(mock, 3);
+        ChunkedTransporter<MockTransporter> ct(mock, 3, 1000);
 
         const Data payload(10, 0x22);
         ct.send(Data(payload));
