@@ -46,7 +46,8 @@ class ChunkedTransporter : public BaseTransporter {
                                               std::to_string(data.size()));
                 Data packet;
                 {
-                        std::scoped_lock lock(egress_mutex, ingress_mutex);
+                        std::lock_guard<M> lock_e(egress_mutex);
+                        std::lock_guard<M> lock_i(ingress_mutex);
                         remove_stale();
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
@@ -148,7 +149,8 @@ class ChunkedTransporter : public BaseTransporter {
                 }
                 std::function<void()> defer;
                 {
-                        std::scoped_lock lock(ingress_mutex, egress_mutex);
+                        std::lock_guard<M> lock_e(egress_mutex);
+                        std::lock_guard<M> lock_i(ingress_mutex);
                         remove_stale();
                         switch (type_result.value()) {
                         case PacketType::ack:
@@ -264,8 +266,8 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto next_index = ack.index + 1;
 
                 return [this, sid, next_index]() {
-                        std::scoped_lock lock(this->egress_mutex,
-                                              this->ingress_mutex);
+                        std::lock_guard<M> lock_e(this->egress_mutex);
+                        std::lock_guard<M> lock_i(this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
                         auto &session = it->second;
                         if (it != this->egress_map.end() &&
@@ -327,8 +329,8 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto retry_index = nack.index;
 
                 return [this, sid, retry_index]() {
-                        std::scoped_lock lock(this->egress_mutex,
-                                              this->ingress_mutex);
+                        std::lock_guard<M> lock_e(this->egress_mutex);
+                        std::lock_guard<M> lock_i(this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
                         auto &session = it->second;
                         if (it != this->egress_map.end() &&
