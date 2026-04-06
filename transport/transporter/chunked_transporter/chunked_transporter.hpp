@@ -505,22 +505,45 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 const auto now = std::chrono::steady_clock::now();
+
                 auto prune =
-                    [&](std::unordered_map<SessionId, SessionWrapper> &map) {
+                    [&](std::unordered_map<SessionId, SessionWrapper> &map,
+                        const char *label) {
                             for (auto it = map.begin(); it != map.end();) {
-                                    if (now - it->second.timestamp > timeout) {
-                                            it = map.erase(it);
+                                    auto age = now - it->second.timestamp;
+
+                                    if (age > timeout) {
+                                            auto age_ms =
+                                                std::chrono::duration_cast<
+                                                    std::chrono::milliseconds>(
+                                                    age)
+                                                    .count();
+                                            auto timeout_ms =
+                                                std::chrono::duration_cast<
+                                                    std::chrono::milliseconds>(
+                                                    timeout)
+                                                    .count();
+
                                             logging::logger().println(
                                                 logging::LogLevel::Warning, TAG,
-                                                "removed stale request");
+                                                std::string("removed stale ") +
+                                                    label + " session: " +
+                                                    std::to_string(it->first) +
+                                                    " (age: " +
+                                                    std::to_string(age_ms) +
+                                                    "ms, timeout: " +
+                                                    std::to_string(timeout_ms) +
+                                                    "ms)");
+
+                                            it = map.erase(it);
                                     } else {
                                             ++it;
                                     }
                             }
                     };
 
-                prune(egress_map);
-                prune(ingress_map);
+                prune(egress_map, "egress");
+                prune(ingress_map, "ingress");
         }
 };
 
