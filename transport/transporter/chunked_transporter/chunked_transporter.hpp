@@ -46,6 +46,7 @@ class ChunkedTransporter : public BaseTransporter {
                 Data packet;
                 {
                         std::lock_guard<M> lock(egress_mutex);
+                        remove_stale();
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
                         if (session_result.failed()) {
@@ -147,6 +148,7 @@ class ChunkedTransporter : public BaseTransporter {
                 std::function<void()> defer;
                 {
                         std::lock_guard<M> lock(ingress_mutex);
+                        remove_stale();
                         switch (type_result.value()) {
                         case PacketType::ack:
                                 logging::logger().println(
@@ -228,6 +230,10 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 auto &session = it->second;
+                session.timestamp =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
                 const auto &chunks = session.chunks;
                 if (chunks.empty()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -243,10 +249,6 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 session.tries = 0;
-                session.timestamp =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
                 const uint16_t total_chunks = chunks[ack.index].total_chunks;
                 if (ack.index >= total_chunks - 1) {
                         logging::logger().println(
@@ -299,6 +301,10 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 auto &session = it->second;
+                session.timestamp =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
                 const auto &chunks = session.chunks;
                 if (nack.index >= chunks.size()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -398,7 +404,12 @@ class ChunkedTransporter : public BaseTransporter {
                         };
                 }
 
-                auto &chunks = it->second.chunks;
+                auto &session = it->second;
+                session.timestamp =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+                auto &chunks = session.chunks;
                 if (chunk_index >= chunks.size()) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
@@ -492,6 +503,34 @@ class ChunkedTransporter : public BaseTransporter {
                                         callback_result.error());
                             }
                     };
+        }
+
+        void remove_stale() {
+                const auto now =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+                std::vector<SessionId> to_remove_egress;
+                std::vector<SessionId> to_remove_ingress;
+                for (const auto &[id, session] : egress_map) {
+                        if (now - session.timestamp > timeout) {
+                                to_remove_egress.push_back(id);
+                        }
+                }
+
+                for (const auto &[id, session] : ingress_map) {
+                        if (now - session.timestamp > timeout) {
+                                to_remove_ingress.push_back(id);
+                        }
+                }
+
+                for (const auto &id : to_remove_egress) {
+                        egress_map.erase(id);
+                }
+
+                for (const auto &id : to_remove_ingress) {
+                        ingress_map.erase(id);
+                }
         }
 };
 
