@@ -21,13 +21,14 @@ namespace transport {
 struct SessionWrapper {
         std::vector<Chunk> chunks;
         uint16_t tries;
-        long long timestamp;
+        std::chrono::steady_clock::time_point timestamp;
 };
 
 template <Transporter T, locking::Mutex M = DefaultMutex>
 class ChunkedTransporter : public BaseTransporter {
       public:
-        ChunkedTransporter(T &transporter, uint16_t max_tries, uint16_t timeout)
+        ChunkedTransporter(T &transporter, uint16_t max_tries,
+                           std::chrono::milliseconds timeout)
             : transporter(transporter), max_tries(max_tries), timeout(timeout) {
                 transporter.set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
@@ -82,11 +83,7 @@ class ChunkedTransporter : public BaseTransporter {
                         auto &session = egress_map[next_session_id];
                         session.chunks = std::move(chunks);
                         session.tries = 0;
-                        session.timestamp = std::chrono::duration_cast<
-                                                std::chrono::milliseconds>(
-                                                std::chrono::steady_clock::now()
-                                                    .time_since_epoch())
-                                                .count();
+                        session.timestamp = std::chrono::steady_clock::now();
                         packet = session.chunks.at(0).to_buf();
                 }
 
@@ -110,7 +107,7 @@ class ChunkedTransporter : public BaseTransporter {
         std::unordered_map<SessionId, SessionWrapper> egress_map;
         std::unordered_map<SessionId, SessionWrapper> ingress_map;
         uint16_t max_tries = 0;
-        uint16_t timeout = 0;
+        std::chrono::milliseconds timeout;
         SessionId next_session_id = 0;
         M egress_mutex;
         M ingress_mutex;
@@ -232,10 +229,7 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 auto &session = it->second;
-                session.timestamp =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
+                session.timestamp = std::chrono::steady_clock::now();
                 const auto &chunks = session.chunks;
                 if (chunks.empty()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -304,10 +298,7 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 auto &session = it->second;
-                session.timestamp =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
+                session.timestamp = std::chrono::steady_clock::now();
                 const auto &chunks = session.chunks;
                 if (nack.index >= chunks.size()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
@@ -387,11 +378,7 @@ class ChunkedTransporter : public BaseTransporter {
                         auto &session = ingress_map[sid];
                         session.chunks = std::move(chunks);
                         session.tries = 0;
-                        session.timestamp = std::chrono::duration_cast<
-                                                std::chrono::milliseconds>(
-                                                std::chrono::steady_clock::now()
-                                                    .time_since_epoch())
-                                                .count();
+                        session.timestamp = std::chrono::steady_clock::now();
 
                         if (chunk_index == total_chunks - 1) {
                                 logging::logger().println(
@@ -409,10 +396,7 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 auto &session = it->second;
-                session.timestamp =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
+                session.timestamp = std::chrono::steady_clock::now();
                 auto &chunks = session.chunks;
                 if (chunk_index >= chunks.size()) {
                         logging::logger().println(
@@ -481,7 +465,13 @@ class ChunkedTransporter : public BaseTransporter {
 
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
+
                 ingress_map.erase(session_id);
+
+                logging::logger().println(logging::LogLevel::Verbose, TAG,
+                                          "ingress session " +
+                                              std::to_string(session_id) +
+                                              " erased");
 
                 if (assemble_result.failed()) {
                         logging::logger().println(
@@ -510,20 +500,19 @@ class ChunkedTransporter : public BaseTransporter {
         }
 
         void remove_stale() {
-                if (timeout == 0) {
+                if (timeout == std::chrono::milliseconds::zero()) {
                         return;
                 }
 
-                const auto now =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
-
+                const auto now = std::chrono::steady_clock::now();
                 auto prune =
                     [&](std::unordered_map<SessionId, SessionWrapper> &map) {
                             for (auto it = map.begin(); it != map.end();) {
                                     if (now - it->second.timestamp > timeout) {
                                             it = map.erase(it);
+                                            logging::logger().println(
+                                                logging::LogLevel::Warning, TAG,
+                                                "removed stale request");
                                     } else {
                                             ++it;
                                     }
