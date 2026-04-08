@@ -27,10 +27,12 @@ struct SessionWrapper {
 template <Transporter T, locking::Mutex M = DefaultMutex>
 class ChunkedTransporter : public BaseTransporter {
       public:
-        ChunkedTransporter(T &transporter, uint16_t max_tries,
+        ChunkedTransporter(T &&transporter, uint16_t max_tries,
                            std::chrono::milliseconds timeout)
-            : transporter(transporter), max_tries(max_tries), timeout(timeout) {
-                transporter.set_receiver([this](result::Result<Data> result) {
+            : transporter(std::move(transporter)), max_tries(max_tries),
+              timeout(timeout) {
+                this->transporter.set_receiver(
+                    [this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -103,7 +105,7 @@ class ChunkedTransporter : public BaseTransporter {
 
       private:
         static constexpr auto TAG = "ChunkedTransporter";
-        T &transporter;
+        T transporter;
         std::unordered_map<SessionId, SessionWrapper> egress_map;
         std::unordered_map<SessionId, SessionWrapper> ingress_map;
         uint16_t max_tries = 0;
@@ -545,5 +547,4 @@ class ChunkedTransporter : public BaseTransporter {
         }
 };
 
-static_assert(Transporter<ChunkedTransporter<BaseTransporter>>);
 } // namespace transport

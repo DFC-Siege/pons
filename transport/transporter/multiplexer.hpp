@@ -21,8 +21,10 @@ using TransporterId = uint8_t;
 
 template <Transporter T, locking::Mutex M = DefaultMutex> class Multiplexer {
       public:
-        explicit Multiplexer(T &transporter) : transporter(transporter) {
-                transporter.set_receiver([this](result::Result<Data> result) {
+        explicit Multiplexer(T &&transporter)
+            : transporter(std::move(transporter)) {
+                this->transporter.set_receiver(
+                    [this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -78,7 +80,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Multiplexer {
         static constexpr auto TAG = "Multiplexer";
         friend class InnerChannel;
 
-        T &transporter;
+        T transporter;
         std::unordered_map<TransporterId, std::unique_ptr<InnerChannel>>
             inner_channels;
         M mutex;

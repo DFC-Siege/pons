@@ -9,8 +9,10 @@
 namespace transport {
 template <Transporter T> class DirectTransporter : public BaseTransporter {
       public:
-        explicit DirectTransporter(T &transporter) : transporter(transporter) {
-                transporter.set_receiver([this](result::Result<Data> result) {
+        explicit DirectTransporter(T &&transporter)
+            : transporter(std::move(transporter)) {
+                this->transporter.set_receiver(
+                    [this](result::Result<Data> result) {
                         const auto callback_result = try_callback(result);
                         if (callback_result.failed()) {
                                 logging::logger().println(
@@ -31,8 +33,7 @@ template <Transporter T> class DirectTransporter : public BaseTransporter {
 
       private:
         static constexpr auto TAG = "DirectTransporter";
-        T &transporter;
+        T transporter;
 };
 
-static_assert(Transporter<DirectTransporter<BaseTransporter>>);
 } // namespace transport

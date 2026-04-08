@@ -5,24 +5,10 @@
 
 using namespace transport;
 
-struct MockTransporter {
+struct MockState {
         MTU mtu = 64;
         std::vector<Data> sent;
         std::function<void(result::Result<Data>)> receiver;
-
-        result::Try send(Data &&data) {
-                sent.push_back(std::move(data));
-                return result::ok(true);
-        }
-
-        void set_receiver(std::function<void(result::Result<Data>)> cb) {
-                receiver = std::move(cb);
-        }
-
-        MTU get_mtu() const {
-                return mtu;
-        }
-
         void deliver(Data data) {
                 if (receiver) {
                         receiver(result::ok(std::move(data)));
@@ -30,34 +16,49 @@ struct MockTransporter {
         }
 };
 
+struct MockTransporter {
+        std::shared_ptr<MockState> state;
+        MockTransporter(std::shared_ptr<MockState> s) : state(std::move(s)) {}
+        result::Try send(Data &&data) {
+                state->sent.push_back(std::move(data));
+                return result::ok(true);
+        }
+        void set_receiver(std::function<void(result::Result<Data>)> cb) {
+                state->receiver = std::move(cb);
+        }
+        MTU get_mtu() const {
+                return state->mtu;
+        }
+};
+
 TEST_CASE("Multiplexer create_inner_channel and send prepends id") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &channel = mux.create_inner_channel(0x01);
 
         Data data = {0xAA, 0xBB};
         const auto result = channel.send(std::move(data));
 
         REQUIRE(!result.failed());
-        REQUIRE(mock.sent.size() == 1);
-        REQUIRE(mock.sent[0].size() == 3);
-        REQUIRE(mock.sent[0][0] == 0x01);
-        REQUIRE(mock.sent[0][1] == 0xAA);
-        REQUIRE(mock.sent[0][2] == 0xBB);
+        REQUIRE(s->sent.size() == 1);
+        REQUIRE(s->sent[0].size() == 3);
+        REQUIRE(s->sent[0][0] == 0x01);
+        REQUIRE(s->sent[0][1] == 0xAA);
+        REQUIRE(s->sent[0][2] == 0xBB);
 }
 
 TEST_CASE("Multiplexer create_inner_channel get_mtu subtracts id size") {
-        MockTransporter mock;
-        mock.mtu = 64;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        s->mtu = 64;
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &channel = mux.create_inner_channel(0x01);
 
         REQUIRE(channel.get_mtu() == 63);
 }
 
 TEST_CASE("Multiplexer receive dispatches to inner channel") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &channel = mux.create_inner_channel(0x05);
 
         std::vector<uint8_t> received_data;
@@ -67,43 +68,39 @@ TEST_CASE("Multiplexer receive dispatches to inner channel") {
                 }
         });
 
-        mock.deliver({0x05, 0xCA, 0xFE});
+        s->deliver({0x05, 0xCA, 0xFE});
 
         REQUIRE(received_data == std::vector<uint8_t>{0xCA, 0xFE});
 }
 
 TEST_CASE("Multiplexer handle_receive ignores unknown channel id") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
 
-        REQUIRE_NOTHROW(mock.deliver({0xFF, 0x01, 0x02}));
+        REQUIRE_NOTHROW(s->deliver({0xFF, 0x01, 0x02}));
 }
 
 TEST_CASE("Multiplexer handle_receive ignores empty data") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
 
-        REQUIRE_NOTHROW(mock.deliver({}));
+        REQUIRE_NOTHROW(s->deliver({}));
 }
 
-TEST_CASE("Multiplexer send on unregistered channel returns error") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+TEST_CASE("Multiplexer send on registered channel succeeds") {
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &channel = mux.create_inner_channel(0x01);
 
-        // Manually craft inner channel with wrong parent state
-        // The channel 0x01 is registered, but sending from channel
-        // that checks for its own id should work
         Data data = {0xAA};
         const auto result = channel.send(std::move(data));
         REQUIRE(!result.failed());
-        // The id 0x01 is prepended
-        REQUIRE(mock.sent[0][0] == 0x01);
+        REQUIRE(s->sent[0][0] == 0x01);
 }
 
 TEST_CASE("Multiplexer multiple channels route to correct receiver") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &ch_a = mux.create_inner_channel(0x0A);
         auto &ch_b = mux.create_inner_channel(0x0B);
 
@@ -118,8 +115,8 @@ TEST_CASE("Multiplexer multiple channels route to correct receiver") {
                         received_b = std::move(r).value();
         });
 
-        mock.deliver({0x0A, 0x01, 0x02});
-        mock.deliver({0x0B, 0x03, 0x04});
+        s->deliver({0x0A, 0x01, 0x02});
+        s->deliver({0x0B, 0x03, 0x04});
 
         REQUIRE(received_a.has_value());
         REQUIRE(received_a.value() == Data{0x01, 0x02});
@@ -128,15 +125,15 @@ TEST_CASE("Multiplexer multiple channels route to correct receiver") {
 }
 
 TEST_CASE("Multiplexer channel send does not affect other channels") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
+        auto s = std::make_shared<MockState>();
+        Multiplexer<MockTransporter> mux(MockTransporter{s});
         auto &ch_a = mux.create_inner_channel(0x0A);
         auto &ch_b = mux.create_inner_channel(0x0B);
 
         ch_a.send(Data{0x01});
         ch_b.send(Data{0x02});
 
-        REQUIRE(mock.sent.size() == 2);
-        REQUIRE(mock.sent[0][0] == 0x0A);
-        REQUIRE(mock.sent[1][0] == 0x0B);
+        REQUIRE(s->sent.size() == 2);
+        REQUIRE(s->sent[0][0] == 0x0A);
+        REQUIRE(s->sent[1][0] == 0x0B);
 }
