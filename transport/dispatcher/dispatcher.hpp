@@ -44,22 +44,20 @@ struct WrappedData {
 
 template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
       public:
-        void register_transporter(TransporterId id, T &&transporter) {
-                std::lock_guard<M> lock(mutex);
-                auto [it, inserted] = transporters.emplace(
-                    id, std::move(transporter));
-                assert(inserted && "duplicate transporter id");
-                it->second.set_receiver(
-                    [this](result::Result<Data> result) {
-                            if (result.failed()) {
-                                    logging::logger().println(
-                                        logging::LogLevel::Error, TAG,
-                                        result.error());
-                                    return;
-                            }
+        void register_transporter(TransporterId id,
+                                  std::unique_ptr<T> transporter) {
+                transporter->set_receiver([this](result::Result<Data> result) {
+                        if (result.failed()) {
+                                logging::logger().println(
+                                    logging::LogLevel::Error, TAG,
+                                    result.error());
+                                return;
+                        }
 
-                            handle_data(std::move(result).value());
-                    });
+                        handle_data(std::move(result).value());
+                });
+                std::lock_guard<M> lock(mutex);
+                transporters[id] = std::move(transporter);
         }
 
         result::Try send(TransporterId transporter_id, CommandId command_id,
@@ -72,7 +70,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
                                 return result::err(
                                     "no transporter found with id");
                         }
-                        transporter = &it->second;
+                        transporter = it->second.get();
                 }
 
                 auto wrap_result =
@@ -92,7 +90,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
       private:
         static constexpr auto TAG = "Dispatcher";
         std::unordered_map<CommandId, Handler> handlers;
-        std::unordered_map<TransporterId, T> transporters;
+        std::unordered_map<TransporterId, std::unique_ptr<T>> transporters;
         M mutex;
 
         void handle_data(Data &&data) {
