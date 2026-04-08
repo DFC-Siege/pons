@@ -68,8 +68,9 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Multiplexer {
 
         InnerChannel &create_inner_channel(TransporterId id) {
                 const std::lock_guard<M> lock(mutex);
-                auto [it, _] = inner_channels.emplace(
+                auto [it, inserted] = inner_channels.emplace(
                     id, std::make_unique<InnerChannel>(*this, id));
+                assert(inserted && "duplicate channel id");
                 return *it->second;
         }
 

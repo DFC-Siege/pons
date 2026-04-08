@@ -22,9 +22,10 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
 }
 
 SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
-                     Baudrate baudrate, BufferSize buffer_size)
+                     Baudrate baudrate, BufferSize buffer_size,
+                     uint16_t max_packet_size)
     : baudrate(baudrate), buffer_size(buffer_size), uart(uart), tx_pin(tx_pin),
-      rx_pin(rx_pin), tmp(buffer_size) {
+      rx_pin(rx_pin), max_packet_size(max_packet_size), tmp(buffer_size) {
         uart_config_t uart_config = {.baud_rate = baudrate,
                                      .data_bits = UART_DATA_8_BITS,
                                      .parity = UART_PARITY_DISABLE,
@@ -65,7 +66,16 @@ result::Try SerialHal::send(Data &&data) {
         const uint8_t prefix[2] = {static_cast<uint8_t>(length & 0xFF),
                                 static_cast<uint8_t>((length >> 8) & 0xFF)};
 
-        uart_write_bytes(uart, prefix, sizeof(prefix));
+        const auto prefix_response =
+            uart_write_bytes(uart, prefix, sizeof(prefix));
+        if (prefix_response < 0) {
+                logging::logger().println(
+                    logging::LogLevel::Error, TAG,
+                    "uart_write_bytes prefix failed with " +
+                        std::to_string(prefix_response));
+                return result::err(
+                    "something went wrong while sending prefix over serial");
+        }
         const auto response = uart_write_bytes(uart, data.data(), data.size());
 
         if (response < 0) {
@@ -110,7 +120,7 @@ result::Try SerialHal::loop() {
                     static_cast<uint16_t>(buffer[consumed]) |
                     (static_cast<uint16_t>(buffer[consumed + 1]) << 8);
 
-                if (packet_length > 512 || packet_length == 0) {
+                if (packet_length > max_packet_size || packet_length == 0) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
                             "desync! garbage length=" +

@@ -263,11 +263,10 @@ class ChunkedTransporter : public BaseTransporter {
                         std::lock_guard<M> lock_e(this->egress_mutex);
                         std::lock_guard<M> lock_i(this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
-                        auto &session = it->second;
                         if (it != this->egress_map.end() &&
-                            next_index < session.chunks.size()) {
+                            next_index < it->second.chunks.size()) {
                                 auto packet =
-                                    session.chunks.at(next_index).to_buf();
+                                    it->second.chunks.at(next_index).to_buf();
                                 this->transporter.send(std::move(packet));
                         }
                 };
@@ -323,11 +322,10 @@ class ChunkedTransporter : public BaseTransporter {
                         std::lock_guard<M> lock_e(this->egress_mutex);
                         std::lock_guard<M> lock_i(this->ingress_mutex);
                         auto it = this->egress_map.find(sid);
-                        auto &session = it->second;
                         if (it != this->egress_map.end() &&
-                            retry_index < session.chunks.size()) {
+                            retry_index < it->second.chunks.size()) {
                                 auto packet =
-                                    session.chunks.at(retry_index).to_buf();
+                                    it->second.chunks.at(retry_index).to_buf();
                                 this->transporter.send(std::move(packet));
                         }
                 };

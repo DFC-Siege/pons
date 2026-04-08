@@ -2,13 +2,14 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "result.hpp"
 
-using Headers = std::unordered_map<std::string_view, std::string_view>;
+using Headers = std::unordered_map<std::string, std::string>;
 
 struct Response {
         int status_code;

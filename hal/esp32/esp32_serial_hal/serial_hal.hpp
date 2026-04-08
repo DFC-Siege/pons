@@ -20,7 +20,7 @@ using Pin = uint8_t;
 class SerialHal : public ISerialHal {
       public:
         SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin, Baudrate baudrate,
-                  BufferSize buffer_size);
+                  BufferSize buffer_size, uint16_t max_packet_size = 512);
         result::Try send(Data &&data) override;
         void on_receive(ReceiveCallback cb) override;
         result::Try loop() override;
@@ -34,6 +34,7 @@ class SerialHal : public ISerialHal {
         ReceiveCallback receive_callback;
         Data buffer;
         Data tmp;
+        uint16_t max_packet_size;
         QueueHandle_t event_queue = nullptr;
 };
 } // namespace serial

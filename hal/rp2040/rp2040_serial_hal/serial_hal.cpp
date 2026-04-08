@@ -20,8 +20,9 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
 }
 
 SerialHal::SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
-                     Baudrate baudrate)
-    : uart(uart), baudrate(baudrate), tx_pin(tx_pin), rx_pin(rx_pin) {
+                     Baudrate baudrate, uint16_t max_packet_size)
+    : uart(uart), baudrate(baudrate), tx_pin(tx_pin), rx_pin(rx_pin),
+      max_packet_size(max_packet_size) {
         uart_init(this->uart, this->baudrate);
         gpio_set_function(this->tx_pin, GPIO_FUNC_UART);
         gpio_set_function(this->rx_pin, GPIO_FUNC_UART);
@@ -89,7 +90,7 @@ result::Try SerialHal::loop() {
                     static_cast<uint16_t>(buffer[0]) |
                     (static_cast<uint16_t>(buffer[1]) << 8);
 
-                if (packet_length > 512 || packet_length == 0) {
+                if (packet_length > max_packet_size || packet_length == 0) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
                             "desync detected! garbage length=" +

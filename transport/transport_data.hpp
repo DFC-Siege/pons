@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -28,6 +29,8 @@ template <typename T> T pull_le(DataView buf, size_t offset) {
                 return static_cast<T>(
                     pull_le<std::underlying_type_t<T>>(buf, offset));
         } else {
+                assert(offset + sizeof(T) <= buf.size() &&
+                       "pull_le: out of bounds");
                 T val = 0;
                 constexpr size_t bits_per_unit = sizeof(Unit) * 8;
                 for (size_t i = 0; i < sizeof(T); ++i) {

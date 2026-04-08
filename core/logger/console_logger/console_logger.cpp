@@ -19,8 +19,9 @@ void ConsoleLogger::println(LogLevel level, std::string_view tag,
                 return;
         }
 
-        print(level, tag, value);
-        ::printf("\n");
+        auto level_str = level_to_string(level);
+        ::printf("[%.*s] %.*s: %.*s\n", (int)level_str.size(), level_str.data(),
+                 (int)tag.size(), tag.data(), (int)value.size(), value.data());
 }
 
 bool ConsoleLogger::check_level(LogLevel level) {

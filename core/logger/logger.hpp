@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 
 #include "i_logger.hpp"
 
@@ -18,6 +19,7 @@ class Logger {
         static void set(std::unique_ptr<ILogger> l);
 
       private:
+        static std::mutex mutex;
         static std::unique_ptr<ILogger> logger;
 };
 

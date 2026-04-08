@@ -1,14 +1,21 @@
 #include "serial_hal.hpp"
 #include "result.hpp"
 #include <fcntl.h>
+#include <stdexcept>
 #include <termios.h>
 #include <unistd.h>
 #include <vector>
 
 namespace serial {
 
-SerialHal::SerialHal(const char *device, int baud_rate) {
+SerialHal::SerialHal(const char *device, int baud_rate,
+                     uint16_t max_packet_size)
+    : max_packet_size(max_packet_size) {
         fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (fd < 0) {
+                throw std::runtime_error(
+                    std::string("failed to open serial device: ") + device);
+        }
         termios tty{};
         tcgetattr(fd, &tty);
         cfsetispeed(&tty, baud_rate);
@@ -29,16 +36,26 @@ SerialHal::~SerialHal() {
                 close(fd);
 }
 
+static result::Try write_all(int fd, const uint8_t *buf, size_t len) {
+        while (len > 0) {
+                const auto written = write(fd, buf, len);
+                if (written < 0)
+                        return result::err("failed to write to serial port");
+                buf += written;
+                len -= static_cast<size_t>(written);
+        }
+        return result::ok();
+}
+
 result::Try SerialHal::send(Data &&data) {
         const uint16_t length = static_cast<uint16_t>(data.size());
         const uint8_t prefix[LENGTH_PREFIX_SIZE] = {
             static_cast<uint8_t>(length & 0xFF),
             static_cast<uint8_t>((length >> 8) & 0xFF)};
-        if (write(fd, prefix, LENGTH_PREFIX_SIZE) < 0)
-                return result::err("failed to write length prefix");
-        if (write(fd, data.data(), data.size()) < 0)
-                return result::err("failed to write to serial port");
-        return result::ok();
+        auto r = write_all(fd, prefix, LENGTH_PREFIX_SIZE);
+        if (r.failed())
+                return r;
+        return write_all(fd, data.data(), data.size());
 }
 
 void SerialHal::on_receive(ReceiveCallback cb) {
@@ -48,8 +65,11 @@ void SerialHal::on_receive(ReceiveCallback cb) {
 result::Try SerialHal::loop() {
         uint8_t tmp[BUF_SIZE];
         const auto length = read(fd, tmp, BUF_SIZE);
-        if (length < 0)
+        if (length < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        return result::ok();
                 return result::err("failed to read from serial port");
+        }
         if (length == 0)
                 return result::ok();
 
@@ -59,6 +79,11 @@ result::Try SerialHal::loop() {
                 const uint16_t packet_length =
                     static_cast<uint16_t>(buffer[0]) |
                     (static_cast<uint16_t>(buffer[1]) << 8);
+
+                if (packet_length > max_packet_size || packet_length == 0) {
+                        buffer.erase(buffer.begin());
+                        continue;
+                }
 
                 if (buffer.size() < LENGTH_PREFIX_SIZE + packet_length)
                         break;

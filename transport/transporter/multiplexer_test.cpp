@@ -85,12 +85,3 @@ TEST_CASE("Multiplexer handle_receive ignores empty data") {
 
         REQUIRE_NOTHROW(mock.deliver({}));
 }
-
-TEST_CASE("Multiplexer create_inner_channel returns same channel on same id") {
-        MockTransporter mock;
-        Multiplexer<MockTransporter> mux(mock);
-        auto &channel_a = mux.create_inner_channel(0x0A);
-        auto &channel_b = mux.create_inner_channel(0x0A);
-
-        REQUIRE(&channel_a == &channel_b);
-}

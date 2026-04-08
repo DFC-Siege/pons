@@ -12,7 +12,7 @@
 #include "transporter.hpp"
 
 namespace transport {
-using TranporterId = uint16_t;
+using TransporterId = uint8_t;
 using CommandId = uint16_t;
 using Handler = std::function<void(result::Result<Data>)>;
 
@@ -44,7 +44,7 @@ struct WrappedData {
 
 template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
       public:
-        void register_transporter(TranporterId id,
+        void register_transporter(TransporterId id,
                                   std::unique_ptr<T> transporter) {
                 transporter->set_receiver([this](result::Result<Data> result) {
                         if (result.failed()) {
@@ -60,7 +60,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
                 transporters[id] = std::move(transporter);
         }
 
-        result::Try send(TranporterId transporter_id, CommandId command_id,
+        result::Try send(TransporterId transporter_id, CommandId command_id,
                          Data &&data) {
                 T *transporter = nullptr;
                 {
@@ -90,7 +90,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
       private:
         static constexpr auto TAG = "Dispatcher";
         std::unordered_map<CommandId, Handler> handlers;
-        std::unordered_map<TranporterId, std::unique_ptr<T>> transporters;
+        std::unordered_map<TransporterId, std::unique_ptr<T>> transporters;
         M mutex;
 
         void handle_data(Data &&data) {

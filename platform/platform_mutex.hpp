@@ -10,6 +10,8 @@ struct PicoMutex {
         ~PicoMutex() {
                 critical_section_deinit(&cs);
         }
+        PicoMutex(const PicoMutex &) = delete;
+        PicoMutex &operator=(const PicoMutex &) = delete;
         void lock() {
                 critical_section_enter_blocking(&cs);
         }

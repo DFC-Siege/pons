@@ -20,10 +20,6 @@ TEST_CASE("err() produces failed result") {
         REQUIRE(r.error() == "something went wrong");
 }
 
-TEST_CASE("default constructed result is failed") {
-        const result::Result<int> r;
-        REQUIRE(r.failed());
-}
 
 TEST_CASE("ok_ref() produces non-failed result with reference") {
         int val = 42;

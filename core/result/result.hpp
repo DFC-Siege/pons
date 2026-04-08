@@ -8,8 +8,6 @@
 namespace result {
 template <typename T> class Result {
       public:
-        Result() : fail(true) {
-        }
         Result(bool fail, std::optional<std::string> err, std::optional<T> val)
             : fail(fail), err(std::move(err)), val(std::move(val)) {
         }
