@@ -134,3 +134,60 @@ TEST_CASE("loop handles multiple packets in one read") {
         close(master);
         close(slave);
 }
+
+TEST_CASE("loop clears buffer when max_buffer_size exceeded") {
+        int master, slave;
+        REQUIRE(open_pty_pair(master, slave) == 0);
+
+        // Small max_buffer_size to trigger overflow easily
+        serial::SerialHal hal(ptsname(master), B115200, 512, 16);
+
+        std::vector<uint8_t> received;
+        hal.on_receive(
+            [&](std::vector<uint8_t> data) { received = std::move(data); });
+
+        // Write more than 16 bytes of garbage to overflow the buffer
+        std::vector<uint8_t> garbage(20, 0xFF);
+        write(master, garbage.data(), garbage.size());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        hal.loop();
+
+        // Buffer was cleared, no packets dispatched
+        REQUIRE(received.empty());
+
+        // Now send a valid packet — should work after the clear
+        std::vector<uint8_t> valid = {0x02, 0x00, 0xAA, 0xBB};
+        write(master, valid.data(), valid.size());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        hal.loop();
+
+        REQUIRE(received == std::vector<uint8_t>{0xAA, 0xBB});
+
+        close(master);
+        close(slave);
+}
+
+TEST_CASE("loop does not clear buffer within max_buffer_size") {
+        int master, slave;
+        REQUIRE(open_pty_pair(master, slave) == 0);
+
+        serial::SerialHal hal(ptsname(master), B115200, 512, 2048);
+
+        std::vector<uint8_t> received;
+        hal.on_receive(
+            [&](std::vector<uint8_t> data) { received = std::move(data); });
+
+        // Send a valid packet well within the buffer limit
+        std::vector<uint8_t> raw = {0x03, 0x00, 0x01, 0x02, 0x03};
+        write(master, raw.data(), raw.size());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        hal.loop();
+
+        REQUIRE(received == std::vector<uint8_t>{0x01, 0x02, 0x03});
+
+        close(master);
+        close(slave);
+}
