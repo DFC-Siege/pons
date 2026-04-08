@@ -26,7 +26,7 @@ SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
                      uint16_t max_packet_size, uint32_t max_buffer_size)
     : baudrate(baudrate), buffer_size(buffer_size), uart(uart), tx_pin(tx_pin),
       rx_pin(rx_pin), max_packet_size(max_packet_size),
-      max_buffer_size(max_buffer_size), tmp(buffer_size) {
+      max_buffer_size(max_buffer_size), buffer(), tmp(buffer_size) {
         uart_config_t uart_config = {.baud_rate = baudrate,
                                      .data_bits = UART_DATA_8_BITS,
                                      .parity = UART_PARITY_DISABLE,

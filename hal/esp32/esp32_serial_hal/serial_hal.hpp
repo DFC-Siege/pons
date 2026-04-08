@@ -33,10 +33,10 @@ class SerialHal : public ISerialHal {
         Pin tx_pin;
         Pin rx_pin;
         ReceiveCallback receive_callback;
-        Data buffer;
-        Data tmp;
         uint16_t max_packet_size;
         uint32_t max_buffer_size;
+        Data buffer;
+        Data tmp;
         QueueHandle_t event_queue = nullptr;
 };
 } // namespace serial
