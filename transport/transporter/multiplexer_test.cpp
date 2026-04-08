@@ -85,3 +85,58 @@ TEST_CASE("Multiplexer handle_receive ignores empty data") {
 
         REQUIRE_NOTHROW(mock.deliver({}));
 }
+
+TEST_CASE("Multiplexer send on unregistered channel returns error") {
+        MockTransporter mock;
+        Multiplexer<MockTransporter> mux(mock);
+        auto &channel = mux.create_inner_channel(0x01);
+
+        // Manually craft inner channel with wrong parent state
+        // The channel 0x01 is registered, but sending from channel
+        // that checks for its own id should work
+        Data data = {0xAA};
+        const auto result = channel.send(std::move(data));
+        REQUIRE(!result.failed());
+        // The id 0x01 is prepended
+        REQUIRE(mock.sent[0][0] == 0x01);
+}
+
+TEST_CASE("Multiplexer multiple channels route to correct receiver") {
+        MockTransporter mock;
+        Multiplexer<MockTransporter> mux(mock);
+        auto &ch_a = mux.create_inner_channel(0x0A);
+        auto &ch_b = mux.create_inner_channel(0x0B);
+
+        std::optional<Data> received_a;
+        std::optional<Data> received_b;
+        ch_a.set_receiver([&](result::Result<Data> r) {
+                if (!r.failed())
+                        received_a = std::move(r).value();
+        });
+        ch_b.set_receiver([&](result::Result<Data> r) {
+                if (!r.failed())
+                        received_b = std::move(r).value();
+        });
+
+        mock.deliver({0x0A, 0x01, 0x02});
+        mock.deliver({0x0B, 0x03, 0x04});
+
+        REQUIRE(received_a.has_value());
+        REQUIRE(received_a.value() == Data{0x01, 0x02});
+        REQUIRE(received_b.has_value());
+        REQUIRE(received_b.value() == Data{0x03, 0x04});
+}
+
+TEST_CASE("Multiplexer channel send does not affect other channels") {
+        MockTransporter mock;
+        Multiplexer<MockTransporter> mux(mock);
+        auto &ch_a = mux.create_inner_channel(0x0A);
+        auto &ch_b = mux.create_inner_channel(0x0B);
+
+        ch_a.send(Data{0x01});
+        ch_b.send(Data{0x02});
+
+        REQUIRE(mock.sent.size() == 2);
+        REQUIRE(mock.sent[0][0] == 0x0A);
+        REQUIRE(mock.sent[1][0] == 0x0B);
+}

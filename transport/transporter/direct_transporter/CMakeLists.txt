@@ -16,4 +16,10 @@ else()
                 DESTINATION include/pons
                 FILES_MATCHING PATTERN "*.hpp"
         )
+        if(PLATFORM STREQUAL "posix")
+                add_executable(direct_transporter_test direct_transporter_test.cpp)
+                target_link_libraries(direct_transporter_test PRIVATE Catch2::Catch2WithMain direct_transporter transporter mutex platform)
+                target_compile_features(direct_transporter_test PRIVATE cxx_std_20)
+                catch_discover_tests(direct_transporter_test)
+        endif()
 endif()

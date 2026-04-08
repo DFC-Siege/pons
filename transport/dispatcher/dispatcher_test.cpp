@@ -157,3 +157,34 @@ TEST_CASE("WrappedData unwrap returns error on empty data") {
         const auto result = WrappedData::unwrap_data({});
         REQUIRE(result.failed());
 }
+
+TEST_CASE("Dispatcher send to non-existent transporter returns error") {
+        Dispatcher<MockTransporter> dispatcher;
+        const auto result = dispatcher.send(0x42, 0x01, Data{0xAA});
+        REQUIRE(result.failed());
+}
+
+TEST_CASE("Dispatcher multiple transporters route independently") {
+        Dispatcher<MockTransporter> dispatcher;
+        auto owned_a = std::make_unique<MockTransporter>();
+        auto owned_b = std::make_unique<MockTransporter>();
+        auto &mock_a = *owned_a;
+        auto &mock_b = *owned_b;
+        dispatcher.register_transporter(0x01, std::move(owned_a));
+        dispatcher.register_transporter(0x02, std::move(owned_b));
+
+        dispatcher.send(0x01, 0x00, Data{0xAA});
+        dispatcher.send(0x02, 0x00, Data{0xBB});
+
+        REQUIRE(mock_a.sent.size() == 1);
+        REQUIRE(mock_b.sent.size() == 1);
+}
+
+TEST_CASE("WrappedData wrap produces correct little-endian command id") {
+        const auto result = WrappedData::wrap_data(0x0102, Data{0xFF});
+        REQUIRE(!result.failed());
+        const auto &buf = result.value();
+        REQUIRE(buf[0] == 0x02);
+        REQUIRE(buf[1] == 0x01);
+        REQUIRE(buf[2] == 0xFF);
+}

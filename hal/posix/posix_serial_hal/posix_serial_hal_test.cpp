@@ -75,3 +75,62 @@ TEST_CASE("loop returns ok when no data available") {
         close(master);
         close(slave);
 }
+
+TEST_CASE("loop recovers from desync garbage byte") {
+        int master, slave;
+        REQUIRE(open_pty_pair(master, slave) == 0);
+
+        serial::SerialHal hal(ptsname(master));
+
+        std::vector<uint8_t> received;
+        hal.on_receive(
+            [&](std::vector<uint8_t> data) { received = std::move(data); });
+
+        // Write a garbage byte followed by a valid packet
+        std::vector<uint8_t> raw = {
+            0xFF,                         // garbage byte
+            0x02, 0x00, 0xAA, 0xBB        // valid 2-byte packet
+        };
+        write(master, raw.data(), raw.size());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        // May need multiple loop calls to resync
+        for (int i = 0; i < 5 && received.empty(); ++i) {
+                hal.loop();
+        }
+
+        REQUIRE(received == std::vector<uint8_t>{0xAA, 0xBB});
+
+        close(master);
+        close(slave);
+}
+
+TEST_CASE("loop handles multiple packets in one read") {
+        int master, slave;
+        REQUIRE(open_pty_pair(master, slave) == 0);
+
+        serial::SerialHal hal(ptsname(master));
+
+        std::vector<std::vector<uint8_t>> received;
+        hal.on_receive([&](std::vector<uint8_t> data) {
+                received.push_back(std::move(data));
+        });
+
+        // Two back-to-back packets
+        std::vector<uint8_t> raw = {
+            0x02, 0x00, 0x01, 0x02,       // packet 1: [0x01, 0x02]
+            0x01, 0x00, 0x03              // packet 2: [0x03]
+        };
+        write(master, raw.data(), raw.size());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        hal.loop();
+
+        REQUIRE(received.size() == 2);
+        REQUIRE(received[0] == std::vector<uint8_t>{0x01, 0x02});
+        REQUIRE(received[1] == std::vector<uint8_t>{0x03});
+
+        close(master);
+        close(slave);
+}

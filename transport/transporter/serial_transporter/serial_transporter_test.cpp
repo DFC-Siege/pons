@@ -83,3 +83,25 @@ TEST_CASE("SerialTransporter send empty data") {
         REQUIRE(mock.sent.size() == 1);
         REQUIRE(mock.sent[0].empty());
 }
+
+TEST_CASE("SerialTransporter send exceeding MTU returns error") {
+        MockSerialHal mock;
+        SerialTransporter st(mock, 4);
+
+        Data data = {0x01, 0x02, 0x03, 0x04, 0x05};
+        const auto result = st.send(std::move(data));
+
+        REQUIRE(result.failed());
+        REQUIRE(mock.sent.empty());
+}
+
+TEST_CASE("SerialTransporter send at exact MTU succeeds") {
+        MockSerialHal mock;
+        SerialTransporter st(mock, 4);
+
+        Data data = {0x01, 0x02, 0x03, 0x04};
+        const auto result = st.send(std::move(data));
+
+        REQUIRE(!result.failed());
+        REQUIRE(mock.sent.size() == 1);
+}

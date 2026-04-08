@@ -136,3 +136,93 @@ TEST_CASE("Chunk assemble returns error on session id mismatch") {
         const auto result = transport::Chunk::assemble(std::move(chunks), 1, 1);
         REQUIRE(result.failed());
 }
+
+TEST_CASE("Chunk assemble returns error on out of order chunks") {
+        transport::Chunk c0;
+        c0.session_id = 1;
+        c0.index = 1;
+        c0.total_chunks = 2;
+        c0.payload = {0x01};
+        c0.checksum = transport::crc16(c0.payload);
+
+        transport::Chunk c1;
+        c1.session_id = 1;
+        c1.index = 0;
+        c1.total_chunks = 2;
+        c1.payload = {0x02};
+        c1.checksum = transport::crc16(c1.payload);
+
+        std::vector<transport::Chunk> chunks;
+        chunks.push_back(std::move(c0));
+        chunks.push_back(std::move(c1));
+        const auto result = transport::Chunk::assemble(std::move(chunks), 1, 2);
+        REQUIRE(result.failed());
+}
+
+TEST_CASE("Chunk assemble returns error on missing chunks") {
+        transport::Chunk c0;
+        c0.session_id = 1;
+        c0.index = 0;
+        c0.total_chunks = 3;
+        c0.payload = {0x01};
+        c0.checksum = transport::crc16(c0.payload);
+
+        std::vector<transport::Chunk> chunks;
+        chunks.push_back(std::move(c0));
+        const auto result = transport::Chunk::assemble(std::move(chunks), 1, 3);
+        REQUIRE(result.failed());
+}
+
+TEST_CASE("crc16 returns zero for empty data") {
+        const auto result = transport::crc16({});
+        REQUIRE(result == 0);
+}
+
+TEST_CASE("crc16 returns non-zero for non-empty data") {
+        const std::vector<uint8_t> data = {0x01, 0x02, 0x03};
+        const auto result = transport::crc16(data);
+        REQUIRE(result != 0);
+}
+
+TEST_CASE("crc16 is deterministic") {
+        const std::vector<uint8_t> data = {0xDE, 0xAD, 0xBE, 0xEF};
+        REQUIRE(transport::crc16(data) == transport::crc16(data));
+}
+
+TEST_CASE("crc16 differs for different data") {
+        const std::vector<uint8_t> a = {0x01, 0x02};
+        const std::vector<uint8_t> b = {0x03, 0x04};
+        REQUIRE(transport::crc16(a) != transport::crc16(b));
+}
+
+TEST_CASE("get_packet_type returns error on empty data") {
+        const auto result = transport::get_packet_type({});
+        REQUIRE(result.failed());
+}
+
+TEST_CASE("get_packet_type returns error on unknown type") {
+        const std::vector<uint8_t> buf = {0xFF};
+        const auto result = transport::get_packet_type(buf);
+        REQUIRE(result.failed());
+}
+
+TEST_CASE("get_packet_type identifies chunk") {
+        const std::vector<uint8_t> buf = {0x00};
+        const auto result = transport::get_packet_type(buf);
+        REQUIRE(!result.failed());
+        REQUIRE(result.value() == transport::PacketType::chunk);
+}
+
+TEST_CASE("get_packet_type identifies ack") {
+        const std::vector<uint8_t> buf = {0x01};
+        const auto result = transport::get_packet_type(buf);
+        REQUIRE(!result.failed());
+        REQUIRE(result.value() == transport::PacketType::ack);
+}
+
+TEST_CASE("get_packet_type identifies nack") {
+        const std::vector<uint8_t> buf = {0x02};
+        const auto result = transport::get_packet_type(buf);
+        REQUIRE(!result.failed());
+        REQUIRE(result.value() == transport::PacketType::nack);
+}
