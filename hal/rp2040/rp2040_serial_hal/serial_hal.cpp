@@ -20,9 +20,10 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
 }
 
 SerialHal::SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
-                     Baudrate baudrate, uint16_t max_packet_size)
+                     Baudrate baudrate, uint16_t max_packet_size,
+                     uint32_t max_buffer_size)
     : uart(uart), baudrate(baudrate), tx_pin(tx_pin), rx_pin(rx_pin),
-      max_packet_size(max_packet_size) {
+      max_packet_size(max_packet_size), max_buffer_size(max_buffer_size) {
         uart_init(this->uart, this->baudrate);
         gpio_set_function(this->tx_pin, GPIO_FUNC_UART);
         gpio_set_function(this->rx_pin, GPIO_FUNC_UART);
@@ -83,6 +84,13 @@ result::Try SerialHal::loop() {
                     logging::LogLevel::Debug, TAG,
                     "read bytes from hardware, buffer size=" +
                         std::to_string(buffer.size()));
+        }
+
+        if (buffer.size() > max_buffer_size) {
+                logging::logger().println(logging::LogLevel::Warning, TAG,
+                                          "buffer overflow, clearing");
+                buffer.clear();
+                return result::ok();
         }
 
         while (buffer.size() >= 2) {

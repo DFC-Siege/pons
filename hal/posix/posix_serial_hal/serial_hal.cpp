@@ -9,8 +9,8 @@
 namespace serial {
 
 SerialHal::SerialHal(const char *device, int baud_rate,
-                     uint16_t max_packet_size)
-    : max_packet_size(max_packet_size) {
+                     uint16_t max_packet_size, uint32_t max_buffer_size)
+    : max_packet_size(max_packet_size), max_buffer_size(max_buffer_size) {
         fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK);
         if (fd < 0) {
                 throw std::runtime_error(
@@ -74,6 +74,11 @@ result::Try SerialHal::loop() {
                 return result::ok();
 
         buffer.insert(buffer.end(), tmp, tmp + length);
+
+        if (buffer.size() > max_buffer_size) {
+                buffer.clear();
+                return result::ok();
+        }
 
         while (buffer.size() >= LENGTH_PREFIX_SIZE) {
                 const uint16_t packet_length =

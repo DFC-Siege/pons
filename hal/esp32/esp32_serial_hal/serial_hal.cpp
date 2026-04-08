@@ -23,9 +23,10 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
 
 SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
                      Baudrate baudrate, BufferSize buffer_size,
-                     uint16_t max_packet_size)
+                     uint16_t max_packet_size, uint32_t max_buffer_size)
     : baudrate(baudrate), buffer_size(buffer_size), uart(uart), tx_pin(tx_pin),
-      rx_pin(rx_pin), max_packet_size(max_packet_size), tmp(buffer_size) {
+      rx_pin(rx_pin), max_packet_size(max_packet_size),
+      max_buffer_size(max_buffer_size), tmp(buffer_size) {
         uart_config_t uart_config = {.baud_rate = baudrate,
                                      .data_bits = UART_DATA_8_BITS,
                                      .parity = UART_PARITY_DISABLE,
@@ -113,6 +114,13 @@ result::Try SerialHal::loop() {
         }
 
         buffer.insert(buffer.end(), tmp.begin(), tmp.begin() + length);
+
+        if (buffer.size() > max_buffer_size) {
+                logging::logger().println(logging::LogLevel::Warning, TAG,
+                                          "buffer overflow, clearing");
+                buffer.clear();
+                return result::ok();
+        }
 
         size_t consumed = 0;
         while (buffer.size() - consumed >= 2) {
