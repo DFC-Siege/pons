@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cassert>
 #include <memory>
 #include <mutex>
+
+#include "mutex.hpp"
+#include "platform_mutex.hpp"
 
 #include "i_logger.hpp"
 
@@ -12,18 +16,26 @@ class NullLogger : public BaseLogger {
         void println(LogLevel, std::string_view, std::string_view) override{};
 };
 
-class Logger {
+template <locking::Mutex M = DefaultMutex> class Logger {
       public:
-        static ILogger &instance();
+        static ILogger &instance() {
+                std::lock_guard<M> lock(mutex);
+                assert(logger != nullptr && "No logger set");
+                return *logger;
+        }
 
-        static void set(std::unique_ptr<ILogger> l);
+        static void set(std::unique_ptr<ILogger> l) {
+                std::lock_guard<M> lock(mutex);
+                logger = std::move(l);
+        }
 
       private:
-        static std::mutex mutex;
-        static std::unique_ptr<ILogger> logger;
+        static inline M mutex;
+        static inline std::unique_ptr<ILogger> logger =
+            std::make_unique<NullLogger>();
 };
 
 inline ILogger &logger() {
-        return Logger::instance();
+        return Logger<>::instance();
 }
 } // namespace logging
