@@ -16,7 +16,7 @@
 #include "transporter.hpp"
 
 namespace transport {
-using SessionId = uint32_t;
+using SessionId = uint8_t;
 
 struct RequestWrapper {
         SessionId session_id;

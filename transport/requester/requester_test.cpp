@@ -80,20 +80,20 @@ struct TestFixture {
 };
 
 TEST_CASE("RequestWrapper round trips") {
-        RequestWrapper original{0x12345678, true, {0xAA, 0xBB, 0xCC}};
+        RequestWrapper original{0xFF, true, {0xAA, 0xBB, 0xCC}};
         auto data = RequestWrapper::to_data(std::move(original));
 
         REQUIRE(data.size() == sizeof(SessionId) + 1 + 3);
 
         auto result = RequestWrapper::from_data(std::move(data));
         REQUIRE(!result.failed());
-        REQUIRE(result.value().session_id == 0x12345678);
+        REQUIRE(result.value().session_id == 0xFF);
         REQUIRE(result.value().success == true);
         REQUIRE(result.value().data == Data{0xAA, 0xBB, 0xCC});
 }
 
 TEST_CASE("RequestWrapper from_data fails on too small data") {
-        Data small = {0x01, 0x02, 0x03, 0x04};
+        Data small = {0x01};
         auto result = RequestWrapper::from_data(std::move(small));
         REQUIRE(result.failed());
 }
@@ -111,7 +111,8 @@ TEST_CASE("send_request sends wrapped data through dispatcher") {
         REQUIRE(!handle_result.failed());
         REQUIRE(f.mock->sent.size() == 1);
 
-        // Sent data should be: command_id(2) + session_id(4) + status(1) + payload(4)
+        // Sent data should be: command_id(2) + session_id(4) + status(1) +
+        // payload(4)
         REQUIRE(f.mock->sent[0].size() ==
                 sizeof(CommandId) + sizeof(SessionId) + 1 + sizeof(uint32_t));
 }
@@ -244,7 +245,7 @@ TEST_CASE("response to unknown session id does not crash") {
             TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
         REQUIRE(!handle_result.failed());
 
-        REQUIRE_NOTHROW(f.deliver_response(999, 0));
+        REQUIRE_NOTHROW(f.deliver_response(100, 0));
 }
 
 TEST_CASE("session ids increment across requests") {
@@ -386,8 +387,8 @@ TEST_CASE("register_requestable sends error response on handler failure") {
         f.mock->sent.clear();
 
         RequestWrapper req{session_id, true, TestPayload{42}.serialize()};
-        auto wrapped =
-            WrappedData::wrap_data(CMD_REQUEST, RequestWrapper::to_data(std::move(req)));
+        auto wrapped = WrappedData::wrap_data(
+            CMD_REQUEST, RequestWrapper::to_data(std::move(req)));
         f.mock->deliver(std::move(wrapped).value());
 
         // Should have sent a response with success=false
