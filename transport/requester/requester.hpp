@@ -132,6 +132,64 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                 return result::ok(handle);
         }
 
+        template <serializer::Serializable Q, serializer::Serializable R>
+        void register_requestable(CommandId request_command_id,
+                                  CommandId response_command_id,
+                                  TransporterId transporter_id,
+                                  std::function<result::Result<R>(Q)> handler) {
+                dispatcher.register_handler(
+                    request_command_id,
+                    [this, response_command_id, transporter_id,
+                     handler =
+                         std::move(handler)](result::Result<Data> result) {
+                            if (result.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        result.error());
+                                    return;
+                            }
+
+                            auto unwrap_result = RequestWrapper::from_data(
+                                std::move(result).value());
+                            if (unwrap_result.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        unwrap_result.error());
+                                    return;
+                            }
+                            auto wrapped = std::move(unwrap_result).value();
+
+                            auto query = Q::deserialize(wrapped.data);
+                            if (query.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        query.error());
+                                    return;
+                            }
+
+                            auto response = handler(std::move(query).value());
+                            if (response.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        response.error());
+                                    return;
+                            }
+
+                            RequestWrapper response_wrapper{
+                                wrapped.session_id,
+                                std::move(response).value().serialize()};
+                            auto send_result = dispatcher.send(
+                                transporter_id, response_command_id,
+                                RequestWrapper::to_data(
+                                    std::move(response_wrapper)));
+                            if (send_result.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        send_result.error());
+                            }
+                    });
+        }
+
       private:
         static constexpr auto TAG = "Requester";
         Dispatcher<T, M> &dispatcher;

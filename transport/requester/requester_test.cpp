@@ -264,3 +264,74 @@ TEST_CASE("session ids increment across requests") {
             detail::pull_le<SessionId>(f.mock->sent[1], sizeof(CommandId));
         REQUIRE(sid0 != sid1);
 }
+
+TEST_CASE("register_requestable handles request and sends response") {
+        TestFixture f;
+
+        f.requester.register_requestable<TestPayload, TestPayload>(
+            CMD_REQUEST, CMD_RESPONSE, TID,
+            [](TestPayload query) -> result::Result<TestPayload> {
+                    return result::ok(TestPayload{query.value * 2});
+            });
+
+        // Simulate incoming request with session_id=0x42 and value=10
+        Data request_data;
+        detail::push_le(request_data, SessionId{0x42});
+        detail::push_le(request_data, uint32_t{10});
+        auto wrapped = WrappedData::wrap_data(CMD_REQUEST, std::move(request_data));
+        f.mock->deliver(std::move(wrapped).value());
+
+        // Should have sent a response
+        REQUIRE(f.mock->sent.size() == 1);
+
+        // Unwrap: command_id + session_id + payload
+        auto &sent = f.mock->sent[0];
+        auto unwrap = WrappedData::unwrap_data(Data(sent));
+        REQUIRE(!unwrap.failed());
+        REQUIRE(unwrap.value().command_id == CMD_RESPONSE);
+
+        auto resp_wrapper =
+            RequestWrapper::from_data(Data(unwrap.value().data));
+        REQUIRE(!resp_wrapper.failed());
+        REQUIRE(resp_wrapper.value().session_id == 0x42);
+
+        auto response = TestPayload::deserialize(resp_wrapper.value().data);
+        REQUIRE(!response.failed());
+        REQUIRE(response.value().value == 20);
+}
+
+TEST_CASE("register_requestable end to end with send_request") {
+        TestFixture f;
+
+        // Register handler that doubles value
+        f.requester.register_requestable<TestPayload, TestPayload>(
+            CMD_REQUEST, CMD_RESPONSE, TID,
+            [](TestPayload query) -> result::Result<TestPayload> {
+                    return result::ok(TestPayload{query.value * 3});
+            });
+
+        // Send request
+        auto handle_result = f.requester.send_request(
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{7});
+        REQUIRE(!handle_result.failed());
+        auto handle = std::move(handle_result).value();
+
+        // Grab what was sent, feed response back through mock
+        // sent[0] is the outgoing request — extract session_id from it
+        auto outgoing = WrappedData::unwrap_data(Data(f.mock->sent[0]));
+        auto req_wrapper =
+            RequestWrapper::from_data(Data(outgoing.value().data));
+        auto session_id = req_wrapper.value().session_id;
+
+        // Simulate the other side's requestable handler by delivering response
+        Data response_data;
+        detail::push_le(response_data, session_id);
+        detail::push_le(response_data, uint32_t{21});
+        auto wrapped =
+            WrappedData::wrap_data(CMD_RESPONSE, std::move(response_data));
+        f.mock->deliver(std::move(wrapped).value());
+
+        auto result = handle->await<TestPayload>(100ms);
+        REQUIRE(!result.failed());
+        REQUIRE(result.value().value == 21);
+}
