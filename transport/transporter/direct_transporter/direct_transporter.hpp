@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "base_transporter.hpp"
 #include "i_logger.hpp"
 #include "logger.hpp"
@@ -9,9 +11,9 @@
 namespace transport {
 template <Transporter T> class DirectTransporter : public BaseTransporter {
       public:
-        explicit DirectTransporter(T &&transporter)
+        explicit DirectTransporter(std::unique_ptr<T> transporter)
             : transporter(std::move(transporter)) {
-                this->transporter.set_receiver(
+                this->transporter->set_receiver(
                     [this](result::Result<Data> result) {
                         const auto callback_result = try_callback(result);
                         if (callback_result.failed()) {
@@ -24,16 +26,16 @@ template <Transporter T> class DirectTransporter : public BaseTransporter {
         }
 
         result::Try send(Data &&data) override {
-                return transporter.send(std::move(data));
+                return transporter->send(std::move(data));
         }
 
         MTU get_mtu() const override {
-                return transporter.get_mtu();
+                return transporter->get_mtu();
         }
 
       private:
         static constexpr auto TAG = "DirectTransporter";
-        T transporter;
+        std::unique_ptr<T> transporter;
 };
 
 } // namespace transport

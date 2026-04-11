@@ -27,11 +27,11 @@ struct SessionWrapper {
 template <Transporter T, locking::Mutex M = DefaultMutex>
 class ChunkedTransporter : public BaseTransporter {
       public:
-        ChunkedTransporter(T &&transporter, uint16_t max_tries,
+        ChunkedTransporter(std::unique_ptr<T> transporter, uint16_t max_tries,
                            std::chrono::milliseconds timeout)
             : transporter(std::move(transporter)), max_tries(max_tries),
               timeout(timeout) {
-                this->transporter.set_receiver(
+                this->transporter->set_receiver(
                     [this](result::Result<Data> result) {
                         if (result.failed()) {
                                 logging::logger().println(
@@ -60,7 +60,7 @@ class ChunkedTransporter : public BaseTransporter {
                         next_session_id = session_result.value();
 
                         const auto result = Chunk::fragment(
-                            data, transporter.get_mtu(), next_session_id);
+                            data, transporter->get_mtu(), next_session_id);
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -93,11 +93,11 @@ class ChunkedTransporter : public BaseTransporter {
                                           "sending first chunk, size: " +
                                               std::to_string(packet.size()));
 
-                return transporter.send(std::move(packet));
+                return transporter->send(std::move(packet));
         }
 
         MTU get_mtu() const override {
-                const auto mtu = transporter.get_mtu();
+                const auto mtu = transporter->get_mtu();
                 assert(mtu > Chunk::HEADER_SIZE &&
                        "mtu too small for chunking");
                 return mtu - Chunk::HEADER_SIZE;
@@ -105,7 +105,7 @@ class ChunkedTransporter : public BaseTransporter {
 
       private:
         static constexpr auto TAG = "ChunkedTransporter";
-        T transporter;
+        std::unique_ptr<T> transporter;
         std::unordered_map<SessionId, SessionWrapper> egress_map;
         std::unordered_map<SessionId, SessionWrapper> ingress_map;
         uint16_t max_tries = 0;
@@ -185,7 +185,7 @@ class ChunkedTransporter : public BaseTransporter {
                 Nack nack;
                 nack.session_id = session_id;
                 nack.index = index;
-                const auto result = transporter.send(nack.to_buf());
+                const auto result = transporter->send(nack.to_buf());
                 if (result.failed()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   result.error());
@@ -200,7 +200,7 @@ class ChunkedTransporter : public BaseTransporter {
                 Ack ack;
                 ack.session_id = session_id;
                 ack.index = index;
-                const auto result = transporter.send(ack.to_buf());
+                const auto result = transporter->send(ack.to_buf());
                 if (result.failed()) {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   result.error());
@@ -269,7 +269,7 @@ class ChunkedTransporter : public BaseTransporter {
                             next_index < it->second.chunks.size()) {
                                 auto packet =
                                     it->second.chunks.at(next_index).to_buf();
-                                this->transporter.send(std::move(packet));
+                                this->transporter->send(std::move(packet));
                         }
                 };
         }
@@ -328,7 +328,7 @@ class ChunkedTransporter : public BaseTransporter {
                             retry_index < it->second.chunks.size()) {
                                 auto packet =
                                     it->second.chunks.at(retry_index).to_buf();
-                                this->transporter.send(std::move(packet));
+                                this->transporter->send(std::move(packet));
                         }
                 };
         }

@@ -61,7 +61,7 @@ static Nack make_nack(SessionId session_id, Indexer index) {
 
 TEST_CASE("ChunkedTransporter send fragments data into chunks") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         const Data payload(100, 0xAB);
         const auto result = ct.send(Data(payload));
@@ -71,14 +71,14 @@ TEST_CASE("ChunkedTransporter send fragments data into chunks") {
 
 TEST_CASE("ChunkedTransporter get_mtu subtracts header size") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         REQUIRE(ct.get_mtu() == s->mtu - Chunk::HEADER_SIZE);
 }
 
 TEST_CASE("ChunkedTransporter send returns error on empty data") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         const auto result = ct.send({});
         REQUIRE(result.failed());
@@ -87,7 +87,7 @@ TEST_CASE("ChunkedTransporter send returns error on empty data") {
 TEST_CASE("ChunkedTransporter receives and reassembles single chunk") {
         auto s = std::make_shared<MockState>();
         std::optional<Data> received;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
@@ -101,7 +101,7 @@ TEST_CASE("ChunkedTransporter receives and reassembles single chunk") {
 
 TEST_CASE("ChunkedTransporter sends ack on receiving valid chunk") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([](result::Result<Data>) {});
         s->deliver(make_chunk(2, 0, 1, {0xDE, 0xAD}).to_buf());
@@ -113,7 +113,7 @@ TEST_CASE("ChunkedTransporter sends ack on receiving valid chunk") {
 
 TEST_CASE("ChunkedTransporter sends nack on out of order chunk") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([](result::Result<Data>) {});
         s->deliver(make_chunk(3, 1, 2, {0x01}).to_buf());
@@ -127,7 +127,7 @@ TEST_CASE("ChunkedTransporter reassembles multi-chunk message") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
         std::optional<Data> received;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
@@ -156,7 +156,7 @@ static SessionId extract_session_id(const Data &buf) {
 TEST_CASE("ChunkedTransporter send triggers chunk-by-chunk flow via ack") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(40, 0xCC);
@@ -175,7 +175,7 @@ TEST_CASE("ChunkedTransporter send triggers chunk-by-chunk flow via ack") {
 TEST_CASE("ChunkedTransporter retries chunk on nack") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(40, 0xBB);
@@ -196,7 +196,7 @@ TEST_CASE("ChunkedTransporter drops session after max_tries nacks") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
         const uint16_t max_tries = 3;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, max_tries,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), max_tries,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(40, 0xBB);
@@ -217,7 +217,7 @@ TEST_CASE("ChunkedTransporter resets tries to zero on ack after nack") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
         const uint16_t max_tries = 3;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, max_tries,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), max_tries,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(40, 0xBB);
@@ -242,7 +242,7 @@ TEST_CASE("ChunkedTransporter concurrent sessions are independent") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
         std::vector<Data> received;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([&](result::Result<Data> r) {
                 if (!r.failed())
@@ -262,7 +262,7 @@ TEST_CASE("ChunkedTransporter concurrent sessions are independent") {
 
 TEST_CASE("ChunkedTransporter nack for duplicate chunk index") {
         auto s = std::make_shared<MockState>();
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
         ct.set_receiver([](result::Result<Data>) {});
 
@@ -279,7 +279,7 @@ TEST_CASE("ChunkedTransporter nack for duplicate chunk index") {
 TEST_CASE("ChunkedTransporter session is cleaned up after full send") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(10, 0x11);
@@ -304,7 +304,7 @@ TEST_CASE("ChunkedTransporter session is cleaned up after full send") {
 TEST_CASE("ChunkedTransporter send can reuse session id after completion") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                std::chrono::milliseconds(1000));
 
         const Data payload(10, 0x22);
@@ -329,7 +329,7 @@ TEST_CASE("ChunkedTransporter prunes stale egress session on timeout") {
         s->mtu = 16;
         const uint16_t timeout_ms = 50;
         ChunkedTransporter<MockTransporter> ct(
-            MockTransporter{s}, 3, std::chrono::milliseconds(timeout_ms));
+            std::make_unique<MockTransporter>(s), 3, std::chrono::milliseconds(timeout_ms));
 
         const Data payload(40, 0xAA);
         ct.send(Data(payload));
@@ -351,7 +351,7 @@ TEST_CASE("ChunkedTransporter prunes stale ingress session on timeout") {
         s->mtu = 16;
         const uint16_t timeout_ms = 50;
         ChunkedTransporter<MockTransporter> ct(
-            MockTransporter{s}, 3, std::chrono::milliseconds(timeout_ms));
+            std::make_unique<MockTransporter>(s), 3, std::chrono::milliseconds(timeout_ms));
 
         ct.set_receiver([&](result::Result<Data> r) {});
 
@@ -374,7 +374,7 @@ TEST_CASE("ChunkedTransporter does not prune sessions before timeout") {
         auto s = std::make_shared<MockState>();
         s->mtu = 16;
         const auto timeout_ms = std::chrono::milliseconds(1000);
-        ChunkedTransporter<MockTransporter> ct(MockTransporter{s}, 3,
+        ChunkedTransporter<MockTransporter> ct(std::make_unique<MockTransporter>(s), 3,
                                                timeout_ms);
 
         const Data payload(40, 0xAA);

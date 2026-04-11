@@ -34,7 +34,7 @@ struct MockTransporter {
 
 TEST_CASE("DirectTransporter send forwards data to underlying transporter") {
         auto s = std::make_shared<MockState>();
-        DirectTransporter<MockTransporter> dt(MockTransporter{s});
+        DirectTransporter<MockTransporter> dt(std::make_unique<MockTransporter>(s));
 
         Data data = {0x01, 0x02, 0x03};
         const auto result = dt.send(std::move(data));
@@ -47,14 +47,14 @@ TEST_CASE("DirectTransporter send forwards data to underlying transporter") {
 TEST_CASE("DirectTransporter get_mtu returns underlying transporter mtu") {
         auto s = std::make_shared<MockState>();
         s->mtu = 128;
-        DirectTransporter<MockTransporter> dt(MockTransporter{s});
+        DirectTransporter<MockTransporter> dt(std::make_unique<MockTransporter>(s));
 
         REQUIRE(dt.get_mtu() == 128);
 }
 
 TEST_CASE("DirectTransporter receive forwards data to callback") {
         auto s = std::make_shared<MockState>();
-        DirectTransporter<MockTransporter> dt(MockTransporter{s});
+        DirectTransporter<MockTransporter> dt(std::make_unique<MockTransporter>(s));
 
         std::optional<Data> received;
         dt.set_receiver([&](result::Result<Data> result) {
@@ -71,14 +71,14 @@ TEST_CASE("DirectTransporter receive forwards data to callback") {
 
 TEST_CASE("DirectTransporter receive with no callback does not crash") {
         auto s = std::make_shared<MockState>();
-        DirectTransporter<MockTransporter> dt(MockTransporter{s});
+        DirectTransporter<MockTransporter> dt(std::make_unique<MockTransporter>(s));
 
         REQUIRE_NOTHROW(s->deliver(result::ok(Data{0x01})));
 }
 
 TEST_CASE("DirectTransporter forwards failed result to callback") {
         auto s = std::make_shared<MockState>();
-        DirectTransporter<MockTransporter> dt(MockTransporter{s});
+        DirectTransporter<MockTransporter> dt(std::make_unique<MockTransporter>(s));
 
         std::optional<std::string> error;
         dt.set_receiver([&](result::Result<Data> result) {

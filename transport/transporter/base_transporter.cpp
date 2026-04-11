@@ -5,9 +5,9 @@
 namespace transport {
 void BaseTransporter::set_receiver(ReceiveCallback callback) {
         if (this->callback.has_value()) {
-                logging::logger().println(
-                    logging::LogLevel::Warning, "BaseTransporter",
-                    "receiver callback replaced");
+                logging::logger().println(logging::LogLevel::Warning,
+                                          "BaseTransporter",
+                                          "receiver callback replaced");
         }
         this->callback = callback;
 }
