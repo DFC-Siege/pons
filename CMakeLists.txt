@@ -7,6 +7,7 @@ if(ESP_PLATFORM)
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/logger/console_logger
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/serializer
                 ${CMAKE_CURRENT_SOURCE_DIR}/core/mutex
+                ${CMAKE_CURRENT_SOURCE_DIR}/core/semaphore
                 ${CMAKE_CURRENT_SOURCE_DIR}/platform
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
@@ -35,6 +36,7 @@ elseif(PLATFORM STREQUAL "rp2040")
         add_subdirectory(core/logger)
         add_subdirectory(core/serializer)
         add_subdirectory(core/mutex)
+        add_subdirectory(core/semaphore)
         add_subdirectory(platform)
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)
@@ -67,6 +69,7 @@ else()
         add_subdirectory(core/logger/console_logger)
         add_subdirectory(core/serializer)
         add_subdirectory(core/mutex)
+        add_subdirectory(core/semaphore)
         add_subdirectory(platform)
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)

@@ -38,4 +38,8 @@ template <locking::Mutex M = DefaultMutex> class Logger {
 inline ILogger &logger() {
         return Logger<>::instance();
 }
+
+inline void set_logger(std::unique_ptr<ILogger> l) {
+        Logger<>::set(std::move(l));
+}
 } // namespace logging

@@ -1,7 +1,7 @@
 if(ESP_PLATFORM)
         idf_component_register(
                 INCLUDE_DIRS "."
-                REQUIRES mutex
+                REQUIRES mutex semaphore
         )
 else()
         add_library(platform INTERFACE)
@@ -9,7 +9,7 @@ else()
                 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
                 $<INSTALL_INTERFACE:include/pons>
         )
-        target_link_libraries(platform INTERFACE mutex)
+        target_link_libraries(platform INTERFACE mutex semaphore)
         target_compile_features(platform INTERFACE cxx_std_20)
         if(PLATFORM STREQUAL "rp2040")
                 target_link_libraries(platform INTERFACE pico_sync)

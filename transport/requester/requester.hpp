@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -11,7 +10,9 @@
 #include "i_logger.hpp"
 #include "logger.hpp"
 #include "platform_mutex.hpp"
+#include "platform_semaphore.hpp"
 #include "result.hpp"
+#include "semaphore.hpp"
 #include "serializer.hpp"
 #include "transporter.hpp"
 
@@ -48,22 +49,20 @@ struct RequestWrapper {
         }
 };
 
-template <locking::Mutex M = DefaultMutex> class RequestHandle {
+template <locking::Mutex M = DefaultMutex,
+          locking::Semaphore S = DefaultSemaphore>
+class RequestHandle {
       public:
         template <serializer::Serializable R>
         result::Result<R> await(std::chrono::milliseconds timeout) {
-                {
-                        std::unique_lock<M> lock(mutex);
-                        if (!cv.wait_for(lock, timeout, [&] {
-                                    return response.has_value();
-                            })) {
-                                if (on_cleanup) {
-                                        on_cleanup();
-                                }
-                                return result::err("request timed out");
+                if (!sem.acquire(timeout)) {
+                        if (on_cleanup) {
+                                on_cleanup();
                         }
+                        return result::err("request timed out");
                 }
 
+                std::lock_guard<M> lock(mutex);
                 auto result = std::move(*response);
                 if (result.failed()) {
                         return result::err(result.error());
@@ -90,15 +89,18 @@ template <locking::Mutex M = DefaultMutex> class RequestHandle {
         }
 
       private:
-        template <Transporter T, locking::Mutex M2> friend class Requester;
+        template <Transporter T, locking::Mutex M2, locking::Semaphore S2>
+        friend class Requester;
 
-        std::condition_variable_any cv;
+        S sem;
         M mutex;
         std::optional<result::Result<Data>> response;
         std::function<void()> on_cleanup;
 };
 
-template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
+template <Transporter T, locking::Mutex M = DefaultMutex,
+          locking::Semaphore S = DefaultSemaphore>
+class Requester {
       public:
         Requester(Dispatcher<T, M> &dispatcher) : dispatcher(dispatcher) {
         }
@@ -111,13 +113,13 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                                 handle->response =
                                     result::err("requester destroyed");
                         }
-                        handle->cv.notify_one();
+                        handle->sem.release();
                 }
                 pending_requests.clear();
         }
 
         template <serializer::Serializable Q>
-        result::Result<std::shared_ptr<RequestHandle<M>>>
+        result::Result<std::shared_ptr<RequestHandle<M, S>>>
         send_request(TransporterId transporter_id, CommandId command_id,
                      CommandId response_command_id, Q &&request) {
                 const auto session_id = allocate_session();
@@ -125,7 +127,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                         return result::err(session_id.error());
                 }
 
-                auto handle = std::make_shared<RequestHandle<M>>();
+                auto handle = std::make_shared<RequestHandle<M, S>>();
                 handle->on_cleanup = [this, sid = session_id.value()] {
                         cleanup(sid);
                 };
@@ -208,7 +210,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
         static constexpr auto TAG = "Requester";
         Dispatcher<T, M> &dispatcher;
         SessionId next_session{0};
-        std::unordered_map<SessionId, std::shared_ptr<RequestHandle<M>>>
+        std::unordered_map<SessionId, std::shared_ptr<RequestHandle<M, S>>>
             pending_requests;
         M pending_mutex;
         std::unordered_set<CommandId> registered_response_commands;
@@ -257,7 +259,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                             auto wrapped_data =
                                 std::move(unwrap_result).value();
 
-                            std::shared_ptr<RequestHandle<M>> handle;
+                            std::shared_ptr<RequestHandle<M, S>> handle;
                             {
                                     std::lock_guard<M> lock(pending_mutex);
                                     auto it = pending_requests.find(
@@ -284,7 +286,7 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                                     }
                             }
                             cleanup(wrapped_data.session_id);
-                            handle->cv.notify_one();
+                            handle->sem.release();
                     });
 
                 registered_response_commands.insert(response_command_id);

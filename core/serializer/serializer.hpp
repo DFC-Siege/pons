@@ -143,4 +143,11 @@ concept Serializable = requires(T t, DataView buf) {
         { t.serialize() } -> std::same_as<Data>;
         { T::deserialize(buf) } -> std::same_as<result::Result<T>>;
 };
+
+struct Empty {
+        Data serialize() const { return {}; }
+        static result::Result<Empty> deserialize(DataView) {
+                return result::ok(Empty{});
+        }
+};
 } // namespace serializer
