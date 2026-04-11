@@ -20,27 +20,31 @@ using SessionId = uint32_t;
 
 struct RequestWrapper {
         SessionId session_id;
+        bool success;
         Data data;
 
         static Data to_data(RequestWrapper &&request_wrapper) {
                 Data buf;
-                buf.reserve(sizeof(SessionId) + request_wrapper.data.size());
+                buf.reserve(sizeof(SessionId) + 1 +
+                            request_wrapper.data.size());
                 detail::push_le(buf, request_wrapper.session_id);
+                buf.push_back(request_wrapper.success ? 1 : 0);
                 buf.insert(buf.end(), request_wrapper.data.begin(),
                            request_wrapper.data.end());
                 return buf;
         }
 
         static result::Result<RequestWrapper> from_data(Data &&data) {
-                if (data.size() < sizeof(SessionId)) {
+                if (data.size() < sizeof(SessionId) + 1) {
                         return result::err(
                             "data too small to unwrap request wrapper");
                 }
                 const auto session_id = detail::pull_le<SessionId>(data, 0);
+                const auto success = data[sizeof(SessionId)] != 0;
                 auto payload =
-                    Data(data.begin() + sizeof(SessionId), data.end());
+                    Data(data.begin() + sizeof(SessionId) + 1, data.end());
                 return result::ok(
-                    RequestWrapper{session_id, std::move(payload)});
+                    RequestWrapper{session_id, success, std::move(payload)});
         }
 };
 
@@ -99,6 +103,19 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
         Requester(Dispatcher<T, M> &dispatcher) : dispatcher(dispatcher) {
         }
 
+        ~Requester() {
+                std::lock_guard<M> lock(pending_mutex);
+                for (auto &[_, handle] : pending_requests) {
+                        {
+                                std::lock_guard<M> hlock(handle->mutex);
+                                handle->response =
+                                    result::err("requester destroyed");
+                        }
+                        handle->cv.notify_one();
+                }
+                pending_requests.clear();
+        }
+
         template <serializer::Serializable Q>
         result::Result<std::shared_ptr<RequestHandle<M>>>
         send_request(TransporterId transporter_id, CommandId command_id,
@@ -119,7 +136,8 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
 
                 ensure_response_handler(response_command_id);
 
-                RequestWrapper wrapper{session_id.value(), request.serialize()};
+                RequestWrapper wrapper{session_id.value(), true,
+                                       request.serialize()};
                 const auto send_result = dispatcher.send(
                     transporter_id, command_id,
                     std::move(RequestWrapper::to_data(std::move(wrapper))));
@@ -168,16 +186,12 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
                             }
 
                             auto response = handler(std::move(query).value());
-                            if (response.failed()) {
-                                    logging::logger().println(
-                                        logging::LogLevel::Error, TAG,
-                                        response.error());
-                                    return;
-                            }
 
                             RequestWrapper response_wrapper{
-                                wrapped.session_id,
-                                std::move(response).value().serialize()};
+                                wrapped.session_id, !response.failed(),
+                                response.failed()
+                                    ? Data{}
+                                    : std::move(response).value().serialize()};
                             auto send_result = dispatcher.send(
                                 transporter_id, response_command_id,
                                 RequestWrapper::to_data(
@@ -205,10 +219,10 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
         }
 
         result::Result<SessionId> allocate_session() {
+                std::lock_guard<M> lock(pending_mutex);
                 const auto start = next_session;
                 do {
                         const auto id = next_session++;
-                        std::lock_guard<M> lock(pending_mutex);
                         if (!pending_requests.contains(id)) {
                                 return result::ok(id);
                         }
@@ -260,8 +274,14 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Requester {
 
                             {
                                     std::lock_guard<M> lock(handle->mutex);
-                                    handle->response = result::ok(
-                                        std::move(wrapped_data.data));
+                                    if (wrapped_data.success) {
+                                            handle->response = result::ok(
+                                                std::move(wrapped_data.data));
+                                    } else {
+                                            handle->response = result::err(
+                                                "remote handler returned "
+                                                "error");
+                                    }
                             }
                             cleanup(wrapped_data.session_id);
                             handle->cv.notify_one();
