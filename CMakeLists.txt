@@ -14,6 +14,7 @@ if(ESP_PLATFORM)
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/store
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/dispatcher
+                ${CMAKE_CURRENT_SOURCE_DIR}/transport/requester
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter/chunked_transporter
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/transporter/serial_transporter
@@ -41,6 +42,7 @@ elseif(PLATFORM STREQUAL "rp2040")
         add_subdirectory(hal/rp2040/rp2040_serial_hal)
         add_subdirectory(transport)
         add_subdirectory(transport/dispatcher)
+        add_subdirectory(transport/requester)
         add_subdirectory(transport/transporter)
         add_subdirectory(transport/transporter/chunked_transporter)
         add_subdirectory(transport/transporter/serial_transporter)

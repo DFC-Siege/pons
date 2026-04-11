@@ -115,5 +115,5 @@ template <Transporter T, locking::Mutex M = DefaultMutex> class Dispatcher {
                 }
                 target_handler(result::ok(std::move(wrapped_data.data)));
         }
-}; // namespace transport
+};
 } // namespace transport
