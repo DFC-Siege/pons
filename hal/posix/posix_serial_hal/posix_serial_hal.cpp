@@ -1,4 +1,4 @@
-#include "serial_hal.hpp"
+#include "posix_serial_hal.hpp"
 #include "result.hpp"
 #include <fcntl.h>
 #include <stdexcept>
@@ -8,8 +8,9 @@
 
 namespace serial {
 
-SerialHal::SerialHal(const char *device, int baud_rate,
-                     uint16_t max_packet_size, uint32_t max_buffer_size)
+PosixSerialHal::PosixSerialHal(const char *device, int baud_rate,
+                               uint16_t max_packet_size,
+                               uint32_t max_buffer_size)
     : max_packet_size(max_packet_size), max_buffer_size(max_buffer_size) {
         fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK);
         if (fd < 0) {
@@ -31,7 +32,7 @@ SerialHal::SerialHal(const char *device, int baud_rate,
         tcsetattr(fd, TCSANOW, &tty);
 }
 
-SerialHal::~SerialHal() {
+PosixSerialHal::~PosixSerialHal() {
         if (fd >= 0)
                 close(fd);
 }
@@ -47,7 +48,7 @@ static result::Try write_all(int fd, const uint8_t *buf, size_t len) {
         return result::ok();
 }
 
-result::Try SerialHal::send(Data &&data) {
+result::Try PosixSerialHal::send(Data &&data) {
         const uint16_t length = static_cast<uint16_t>(data.size());
         const uint8_t prefix[LENGTH_PREFIX_SIZE] = {
             static_cast<uint8_t>(length & 0xFF),
@@ -58,11 +59,11 @@ result::Try SerialHal::send(Data &&data) {
         return write_all(fd, data.data(), data.size());
 }
 
-void SerialHal::on_receive(ReceiveCallback cb) {
+void PosixSerialHal::on_receive(ReceiveCallback cb) {
         receive_callback = std::move(cb);
 }
 
-result::Try SerialHal::loop() {
+result::Try PosixSerialHal::loop() {
         uint8_t tmp[BUF_SIZE];
         const auto length = read(fd, tmp, BUF_SIZE);
         if (length < 0) {

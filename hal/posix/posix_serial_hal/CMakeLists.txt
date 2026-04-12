@@ -1,4 +1,4 @@
-add_library(posix_serial_hal serial_hal.cpp)
+add_library(posix_serial_hal posix_serial_hal.cpp)
 target_include_directories(posix_serial_hal PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include/pons>

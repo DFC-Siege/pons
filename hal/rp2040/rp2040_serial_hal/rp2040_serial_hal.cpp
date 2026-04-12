@@ -5,11 +5,11 @@
 
 #include "logger.hpp"
 #include "result.hpp"
-#include "serial_hal.hpp"
+#include "rp2040_serial_hal.hpp"
 
 namespace serial {
 
-static constexpr auto TAG = "SerialHal";
+static constexpr auto TAG = "RP2040SerialHal";
 
 static std::string to_hex_string(const uint8_t *data, size_t len) {
         std::string hex;
@@ -19,9 +19,9 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
         return hex;
 }
 
-SerialHal::SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
-                     Baudrate baudrate, uint16_t max_packet_size,
-                     uint32_t max_buffer_size)
+RP2040SerialHal::RP2040SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
+                                 Baudrate baudrate, uint16_t max_packet_size,
+                                 uint32_t max_buffer_size)
     : uart(uart), baudrate(baudrate), tx_pin(tx_pin), rx_pin(rx_pin),
       max_packet_size(max_packet_size), max_buffer_size(max_buffer_size) {
         uart_init(this->uart, this->baudrate);
@@ -41,7 +41,7 @@ SerialHal::SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
                 std::to_string(rx_pin) + " baud=" + std::to_string(baudrate));
 }
 
-result::Try SerialHal::send(Data &&data) {
+result::Try RP2040SerialHal::send(Data &&data) {
         if (data.empty()) {
                 logging::logger().println(
                     logging::LogLevel::Debug, TAG,
@@ -66,13 +66,13 @@ result::Try SerialHal::send(Data &&data) {
         return result::ok();
 }
 
-void SerialHal::on_receive(ReceiveCallback cb) {
+void RP2040SerialHal::on_receive(ReceiveCallback cb) {
         logging::logger().println(logging::LogLevel::Debug, TAG,
                                   "receive callback registered");
         receive_callback = std::move(cb);
 }
 
-result::Try SerialHal::loop() {
+result::Try RP2040SerialHal::loop() {
         bool read_any = false;
         while (uart_is_readable(uart)) {
                 buffer.push_back(static_cast<uint8_t>(uart_getc(uart)));

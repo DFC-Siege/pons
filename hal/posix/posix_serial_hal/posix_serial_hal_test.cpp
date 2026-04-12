@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <vector>
 
-#include "serial_hal.hpp"
+#include "posix_serial_hal.hpp"
 
 static int open_pty_pair(int &master, int &slave) {
         master = posix_openpt(O_RDWR | O_NOCTTY);
@@ -22,7 +22,7 @@ TEST_CASE("send writes data with length prefix to serial port") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master));
+        serial::PosixSerialHal hal(ptsname(master));
 
         std::vector<uint8_t> data = {0x01, 0x02, 0x03};
         const auto result = hal.send(std::vector<uint8_t>(data));
@@ -43,7 +43,7 @@ TEST_CASE("loop calls receive callback with length-prefixed data") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master));
+        serial::PosixSerialHal hal(ptsname(master));
 
         std::vector<uint8_t> received;
         hal.on_receive(
@@ -68,7 +68,7 @@ TEST_CASE("loop returns ok when no data available") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master));
+        serial::PosixSerialHal hal(ptsname(master));
         const auto result = hal.loop();
         REQUIRE(!result.failed());
 
@@ -80,7 +80,7 @@ TEST_CASE("loop recovers from desync garbage byte") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master));
+        serial::PosixSerialHal hal(ptsname(master));
 
         std::vector<uint8_t> received;
         hal.on_receive(
@@ -88,8 +88,8 @@ TEST_CASE("loop recovers from desync garbage byte") {
 
         // Write a garbage byte followed by a valid packet
         std::vector<uint8_t> raw = {
-            0xFF,                         // garbage byte
-            0x02, 0x00, 0xAA, 0xBB        // valid 2-byte packet
+            0xFF,                  // garbage byte
+            0x02, 0x00, 0xAA, 0xBB // valid 2-byte packet
         };
         write(master, raw.data(), raw.size());
 
@@ -110,7 +110,7 @@ TEST_CASE("loop handles multiple packets in one read") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master));
+        serial::PosixSerialHal hal(ptsname(master));
 
         std::vector<std::vector<uint8_t>> received;
         hal.on_receive([&](std::vector<uint8_t> data) {
@@ -119,8 +119,8 @@ TEST_CASE("loop handles multiple packets in one read") {
 
         // Two back-to-back packets
         std::vector<uint8_t> raw = {
-            0x02, 0x00, 0x01, 0x02,       // packet 1: [0x01, 0x02]
-            0x01, 0x00, 0x03              // packet 2: [0x03]
+            0x02, 0x00, 0x01, 0x02, // packet 1: [0x01, 0x02]
+            0x01, 0x00, 0x03        // packet 2: [0x03]
         };
         write(master, raw.data(), raw.size());
 
@@ -140,7 +140,7 @@ TEST_CASE("loop clears buffer when max_buffer_size exceeded") {
         REQUIRE(open_pty_pair(master, slave) == 0);
 
         // Small max_buffer_size to trigger overflow easily
-        serial::SerialHal hal(ptsname(master), B115200, 512, 16);
+        serial::PosixSerialHal hal(ptsname(master), B115200, 512, 16);
 
         std::vector<uint8_t> received;
         hal.on_receive(
@@ -173,7 +173,7 @@ TEST_CASE("loop does not clear buffer within max_buffer_size") {
         int master, slave;
         REQUIRE(open_pty_pair(master, slave) == 0);
 
-        serial::SerialHal hal(ptsname(master), B115200, 512, 2048);
+        serial::PosixSerialHal hal(ptsname(master), B115200, 512, 2048);
 
         std::vector<uint8_t> received;
         hal.on_receive(

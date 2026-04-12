@@ -6,23 +6,23 @@
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
 
-#include "i_serial_hal.hpp"
 #include "result.hpp"
+#include "serial_hal.hpp"
 
 namespace serial {
 using Baudrate = uint;
 using BufferSize = uint32_t;
 using Pin = uint8_t;
 
-class SerialHal : public ISerialHal {
+class RP2040SerialHal {
       public:
-        SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin, Baudrate baudrate,
-                  uint16_t max_packet_size = 512,
-                  uint32_t max_buffer_size = 2048);
+        RP2040SerialHal(uart_inst_t *uart, Pin tx_pin, Pin rx_pin,
+                        Baudrate baudrate, uint16_t max_packet_size = 512,
+                        uint32_t max_buffer_size = 2048);
 
-        result::Try send(Data &&data) override;
-        void on_receive(ReceiveCallback cb) override;
-        result::Try loop() override;
+        result::Try send(Data &&data);
+        void on_receive(ReceiveCallback cb);
+        result::Try loop();
 
       private:
         uart_inst_t *uart;

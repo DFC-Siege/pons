@@ -5,13 +5,13 @@
 #include <hal/uart_types.h>
 #include <string>
 
+#include "esp32_serial_hal.hpp"
 #include "logger.hpp"
 #include "result.hpp"
-#include "serial_hal.hpp"
 
 namespace serial {
 
-static constexpr auto TAG = "SerialHal";
+static constexpr auto TAG = "Esp32SerialHal";
 
 static std::string to_hex_string(const uint8_t *data, size_t len) {
         std::string hex;
@@ -21,9 +21,10 @@ static std::string to_hex_string(const uint8_t *data, size_t len) {
         return hex;
 }
 
-SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
-                     Baudrate baudrate, BufferSize buffer_size,
-                     uint16_t max_packet_size, uint32_t max_buffer_size)
+Esp32SerialHal::Esp32SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
+                               Baudrate baudrate, BufferSize buffer_size,
+                               uint16_t max_packet_size,
+                               uint32_t max_buffer_size)
     : baudrate(baudrate), buffer_size(buffer_size), uart(uart), tx_pin(tx_pin),
       rx_pin(rx_pin), max_packet_size(max_packet_size),
       max_buffer_size(max_buffer_size), buffer(), tmp(buffer_size) {
@@ -50,7 +51,7 @@ SerialHal::SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
                                       " baud=" + std::to_string(baudrate));
 }
 
-result::Try SerialHal::send(Data &&data) {
+result::Try Esp32SerialHal::send(Data &&data) {
         if (data.empty()) {
                 logging::logger().println(
                     logging::LogLevel::Debug, TAG,
@@ -65,7 +66,7 @@ result::Try SerialHal::send(Data &&data) {
                 " bytes: " + to_hex_string(data.data(), data.size()));
 
         const uint8_t prefix[2] = {static_cast<uint8_t>(length & 0xFF),
-                                static_cast<uint8_t>((length >> 8) & 0xFF)};
+                                   static_cast<uint8_t>((length >> 8) & 0xFF)};
 
         const auto prefix_response =
             uart_write_bytes(uart, prefix, sizeof(prefix));
@@ -90,13 +91,13 @@ result::Try SerialHal::send(Data &&data) {
         return result::ok();
 }
 
-void SerialHal::on_receive(ReceiveCallback cb) {
+void Esp32SerialHal::on_receive(ReceiveCallback cb) {
         logging::logger().println(logging::LogLevel::Debug, TAG,
                                   "receive callback registered");
         receive_callback = std::move(cb);
 }
 
-result::Try SerialHal::loop() {
+result::Try Esp32SerialHal::loop() {
         uart_event_t event;
         if (xQueueReceive(event_queue, &event, pdMS_TO_TICKS(10)) != pdTRUE) {
                 return result::ok();

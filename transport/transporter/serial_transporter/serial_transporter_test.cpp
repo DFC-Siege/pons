@@ -1,24 +1,25 @@
-#include "serial_transporter.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <optional>
 #include <vector>
 
+#include "serial_transporter.hpp"
+
 using namespace transport;
 
-struct MockSerialHal : public serial::ISerialHal {
+struct MockSerialHal {
         std::vector<Data> sent;
         serial::ReceiveCallback receiver;
 
-        result::Try send(serial::Data &&data) override {
+        result::Try send(serial::Data &&data) {
                 sent.push_back(data);
                 return result::ok(true);
         }
 
-        void on_receive(serial::ReceiveCallback callback) override {
+        void on_receive(serial::ReceiveCallback callback) {
                 receiver = std::move(callback);
         }
 
-        result::Try loop() override {
+        result::Try loop() {
                 return result::ok(true);
         }
 

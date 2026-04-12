@@ -1,4 +1,4 @@
-add_library(rp2040_serial_hal serial_hal.cpp)
+add_library(rp2040_serial_hal rp2040_serial_hal.cpp)
 target_include_directories(rp2040_serial_hal PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/pons>

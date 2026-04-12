@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "i_serial_hal.hpp"
 #include "result.hpp"
+#include "serial_hal.hpp"
 
 struct QueueDefinition;
 using QueueHandle_t = QueueDefinition *;
@@ -17,14 +17,15 @@ using Baudrate = int;
 using BufferSize = uint32_t;
 using Pin = uint8_t;
 
-class SerialHal : public ISerialHal {
+class Esp32SerialHal {
       public:
-        SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin, Baudrate baudrate,
-                  BufferSize buffer_size, uint16_t max_packet_size = 512,
-                  uint32_t max_buffer_size = 2048);
-        result::Try send(Data &&data) override;
-        void on_receive(ReceiveCallback cb) override;
-        result::Try loop() override;
+        Esp32SerialHal(uart_port_t uart, Pin tx_pin, Pin rx_pin,
+                       Baudrate baudrate, BufferSize buffer_size,
+                       uint16_t max_packet_size = 512,
+                       uint32_t max_buffer_size = 2048);
+        result::Try send(Data &&data);
+        void on_receive(ReceiveCallback cb);
+        result::Try loop();
 
       private:
         Baudrate baudrate;
