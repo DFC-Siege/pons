@@ -145,7 +145,10 @@ concept Serializable = requires(T t, DataView buf) {
 };
 
 struct Empty {
-        Data serialize() const { return {}; }
+        Data serialize() const {
+                return {};
+        }
+
         static result::Result<Empty> deserialize(DataView) {
                 return result::ok(Empty{});
         }
