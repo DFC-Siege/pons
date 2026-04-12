@@ -13,7 +13,6 @@
 #include "platform_semaphore.hpp"
 #include "result.hpp"
 #include "semaphore.hpp"
-#include "serializer.hpp"
 #include "transporter.hpp"
 
 namespace transport {
@@ -53,8 +52,7 @@ template <locking::Mutex M = DefaultMutex,
           locking::Semaphore S = DefaultSemaphore>
 class RequestHandle {
       public:
-        template <serializer::Serializable R>
-        result::Result<R> await(std::chrono::milliseconds timeout) {
+        result::Result<Data> await(std::chrono::milliseconds timeout) {
                 if (!sem.acquire(timeout)) {
                         if (on_cleanup) {
                                 on_cleanup();
@@ -63,11 +61,7 @@ class RequestHandle {
                 }
 
                 std::lock_guard<M> lock(mutex);
-                auto result = std::move(*response);
-                if (result.failed()) {
-                        return result::err(result.error());
-                }
-                return R::deserialize(std::move(result).value());
+                return *response;
         }
 
         bool has_response() {
@@ -75,17 +69,12 @@ class RequestHandle {
                 return response.has_value();
         }
 
-        template <serializer::Serializable R>
-        result::Result<R> take_response() {
+        result::Result<Data> take_response() {
                 std::lock_guard<M> lock(mutex);
                 if (!response.has_value()) {
                         return result::err("no response available");
                 }
-                auto result = std::move(*response);
-                if (result.failed()) {
-                        return result::err(result.error());
-                }
-                return R::deserialize(std::move(result).value());
+                return *response;
         }
 
       private:
@@ -118,10 +107,9 @@ class Requester {
                 pending_requests.clear();
         }
 
-        template <serializer::Serializable Q>
         result::Result<std::shared_ptr<RequestHandle<M, S>>>
         send_request(TransporterId transporter_id, CommandId command_id,
-                     CommandId response_command_id, Q &&request) {
+                     CommandId response_command_id, Data &&data) {
                 const auto session_id = allocate_session();
                 if (session_id.failed()) {
                         return result::err(session_id.error());
@@ -138,8 +126,7 @@ class Requester {
 
                 ensure_response_handler(response_command_id);
 
-                RequestWrapper wrapper{session_id.value(), true,
-                                       request.serialize()};
+                RequestWrapper wrapper{session_id.value(), true, data};
                 const auto send_result = dispatcher.send(
                     transporter_id, command_id,
                     std::move(RequestWrapper::to_data(std::move(wrapper))));
@@ -152,11 +139,10 @@ class Requester {
                 return result::ok(handle);
         }
 
-        template <serializer::Serializable Q, serializer::Serializable R>
-        void register_requestable(CommandId request_command_id,
-                                  CommandId response_command_id,
-                                  TransporterId transporter_id,
-                                  std::function<result::Result<R>(Q)> handler) {
+        void register_requestable(
+            CommandId request_command_id, CommandId response_command_id,
+            TransporterId transporter_id,
+            std::function<result::Result<Data>(Data)> handler) {
                 dispatcher.register_handler(
                     request_command_id,
                     [this, response_command_id, transporter_id,
@@ -179,21 +165,13 @@ class Requester {
                             }
                             auto wrapped = std::move(unwrap_result).value();
 
-                            auto query = Q::deserialize(wrapped.data);
-                            if (query.failed()) {
-                                    logging::logger().println(
-                                        logging::LogLevel::Error, TAG,
-                                        query.error());
-                                    return;
-                            }
-
-                            auto response = handler(std::move(query).value());
+                            auto response = handler(std::move(wrapped.data));
 
                             RequestWrapper response_wrapper{
                                 wrapped.session_id, !response.failed(),
                                 response.failed()
                                     ? Data{}
-                                    : std::move(response).value().serialize()};
+                                    : std::move(response).value()};
                             auto send_result = dispatcher.send(
                                 transporter_id, response_command_id,
                                 RequestWrapper::to_data(

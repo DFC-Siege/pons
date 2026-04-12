@@ -107,11 +107,11 @@ TEST_CASE("send_request sends wrapped data through dispatcher") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         REQUIRE(f.mock->sent.size() == 1);
 
-        // Sent data should be: command_id(2) + session_id(4) + status(1) +
+        // Sent data should be: command_id(2) + session_id(1) + status(1) +
         // payload(4)
         REQUIRE(f.mock->sent[0].size() ==
                 sizeof(CommandId) + sizeof(SessionId) + 1 + sizeof(uint32_t));
@@ -121,7 +121,7 @@ TEST_CASE("send_request to non-existent transporter returns error") {
         TestFixture f;
 
         auto result = f.requester.send_request(0xFF, CMD_REQUEST, CMD_RESPONSE,
-                                               TestPayload{42});
+                                               TestPayload{42}.serialize());
         REQUIRE(result.failed());
 }
 
@@ -129,7 +129,7 @@ TEST_CASE("await returns response on success") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
@@ -138,9 +138,11 @@ TEST_CASE("await returns response on success") {
                 f.deliver_response(0, 99);
         });
 
-        auto result = handle->await<TestPayload>(1000ms);
+        auto await_result = handle->await(1000ms);
         responder.join();
 
+        REQUIRE(!await_result.failed());
+        auto result = TestPayload::deserialize(await_result.value());
         REQUIRE(!result.failed());
         REQUIRE(result.value().value == 99);
 }
@@ -149,21 +151,21 @@ TEST_CASE("await times out when no response") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
-        auto result = handle->await<TestPayload>(10ms);
+        auto result = handle->await(10ms);
         REQUIRE(result.failed());
 }
 
 TEST_CASE("multiple concurrent requests resolve independently") {
         TestFixture f;
 
-        auto h1_result = f.requester.send_request(TID, CMD_REQUEST,
-                                                  CMD_RESPONSE, TestPayload{1});
-        auto h2_result = f.requester.send_request(TID, CMD_REQUEST,
-                                                  CMD_RESPONSE, TestPayload{2});
+        auto h1_result = f.requester.send_request(
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{1}.serialize());
+        auto h2_result = f.requester.send_request(
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{2}.serialize());
         REQUIRE(!h1_result.failed());
         REQUIRE(!h2_result.failed());
         auto h1 = std::move(h1_result).value();
@@ -177,10 +179,14 @@ TEST_CASE("multiple concurrent requests resolve independently") {
                 f.deliver_response(0, 100);
         });
 
-        auto r1 = h1->await<TestPayload>(1000ms);
-        auto r2 = h2->await<TestPayload>(1000ms);
+        auto r1_await = h1->await(1000ms);
+        auto r2_await = h2->await(1000ms);
         responder.join();
 
+        REQUIRE(!r1_await.failed());
+        REQUIRE(!r2_await.failed());
+        auto r1 = TestPayload::deserialize(r1_await.value());
+        auto r2 = TestPayload::deserialize(r2_await.value());
         REQUIRE(!r1.failed());
         REQUIRE(!r2.failed());
         REQUIRE(r1.value().value == 100);
@@ -191,7 +197,7 @@ TEST_CASE("has_response returns false before response arrives") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
@@ -202,7 +208,7 @@ TEST_CASE("has_response returns true after response arrives") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
@@ -215,13 +221,15 @@ TEST_CASE("take_response returns data after response arrives") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
         f.deliver_response(0, 99);
 
-        auto result = handle->take_response<TestPayload>();
+        auto take_result = handle->take_response();
+        REQUIRE(!take_result.failed());
+        auto result = TestPayload::deserialize(take_result.value());
         REQUIRE(!result.failed());
         REQUIRE(result.value().value == 99);
 }
@@ -230,11 +238,11 @@ TEST_CASE("take_response returns error when no response") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
-        auto result = handle->take_response<TestPayload>();
+        auto result = handle->take_response();
         REQUIRE(result.failed());
 }
 
@@ -242,7 +250,7 @@ TEST_CASE("response to unknown session id does not crash") {
         TestFixture f;
 
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
 
         REQUIRE_NOTHROW(f.deliver_response(100, 0));
@@ -252,9 +260,9 @@ TEST_CASE("session ids increment across requests") {
         TestFixture f;
 
         f.requester.send_request(TID, CMD_REQUEST, CMD_RESPONSE,
-                                 TestPayload{1});
+                                 TestPayload{1}.serialize());
         f.requester.send_request(TID, CMD_REQUEST, CMD_RESPONSE,
-                                 TestPayload{2});
+                                 TestPayload{2}.serialize());
 
         REQUIRE(f.mock->sent.size() == 2);
 
@@ -269,10 +277,14 @@ TEST_CASE("session ids increment across requests") {
 TEST_CASE("register_requestable handles request and sends response") {
         TestFixture f;
 
-        f.requester.register_requestable<TestPayload, TestPayload>(
+        f.requester.register_requestable(
             CMD_REQUEST, CMD_RESPONSE, TID,
-            [](TestPayload query) -> result::Result<TestPayload> {
-                    return result::ok(TestPayload{query.value * 2});
+            [](Data data) -> result::Result<Data> {
+                    auto query = TestPayload::deserialize(data);
+                    if (query.failed())
+                            return result::err(query.error());
+                    return result::ok(
+                        TestPayload{query.value().value * 2}.serialize());
             });
 
         // Simulate incoming request with session_id=0x42 and value=10
@@ -304,16 +316,20 @@ TEST_CASE("register_requestable handles request and sends response") {
 TEST_CASE("register_requestable end to end with send_request") {
         TestFixture f;
 
-        // Register handler that doubles value
-        f.requester.register_requestable<TestPayload, TestPayload>(
+        // Register handler that triples value
+        f.requester.register_requestable(
             CMD_REQUEST, CMD_RESPONSE, TID,
-            [](TestPayload query) -> result::Result<TestPayload> {
-                    return result::ok(TestPayload{query.value * 3});
+            [](Data data) -> result::Result<Data> {
+                    auto query = TestPayload::deserialize(data);
+                    if (query.failed())
+                            return result::err(query.error());
+                    return result::ok(
+                        TestPayload{query.value().value * 3}.serialize());
             });
 
         // Send request
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{7});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{7}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
@@ -327,7 +343,9 @@ TEST_CASE("register_requestable end to end with send_request") {
         // Simulate the other side's requestable handler by delivering response
         f.deliver_response(session_id, 21);
 
-        auto result = handle->await<TestPayload>(100ms);
+        auto await_result = handle->await(100ms);
+        REQUIRE(!await_result.failed());
+        auto result = TestPayload::deserialize(await_result.value());
         REQUIRE(!result.failed());
         REQUIRE(result.value().value == 21);
 }
@@ -340,30 +358,30 @@ TEST_CASE("destroying requester unblocks pending awaits") {
         std::shared_ptr<RequestHandle<>> handle;
         {
                 Requester<MockTransporter> requester(dispatcher);
-                auto handle_result = requester.send_request(
-                    TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+                auto handle_result =
+                    requester.send_request(TID, CMD_REQUEST, CMD_RESPONSE,
+                                           TestPayload{42}.serialize());
                 REQUIRE(!handle_result.failed());
                 handle = std::move(handle_result).value();
         } // requester destroyed here
 
         // Should already have a response (error)
         REQUIRE(handle->has_response());
-        auto result = handle->await<TestPayload>(0ms);
+        auto result = handle->await(0ms);
         REQUIRE(result.failed());
 }
 
 TEST_CASE("register_requestable sends error response on handler failure") {
         TestFixture f;
 
-        f.requester.register_requestable<TestPayload, TestPayload>(
-            CMD_REQUEST, CMD_RESPONSE, TID,
-            [](TestPayload) -> result::Result<TestPayload> {
+        f.requester.register_requestable(
+            CMD_REQUEST, CMD_RESPONSE, TID, [](Data) -> result::Result<Data> {
                     return result::err("something went wrong");
             });
 
         // Send request
         auto handle_result = f.requester.send_request(
-            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42});
+            TID, CMD_REQUEST, CMD_RESPONSE, TestPayload{42}.serialize());
         REQUIRE(!handle_result.failed());
         auto handle = std::move(handle_result).value();
 
@@ -374,16 +392,6 @@ TEST_CASE("register_requestable sends error response on handler failure") {
         auto session_id = req_wrapper.value().session_id;
 
         // Simulate incoming request that triggers the error handler
-        Data request_data;
-        detail::push_le(request_data, session_id);
-        detail::push_le(request_data, uint32_t{42});
-        auto request_wrapped =
-            WrappedData::wrap_data(CMD_REQUEST, std::move(request_data));
-
-        // The requestable handler sends error response — which should be
-        // picked up by the response handler. But the requestable is on
-        // CMD_REQUEST, so we need a separate requester-side test.
-        // Instead, test that the mock received an error response.
         f.mock->sent.clear();
 
         RequestWrapper req{session_id, true, TestPayload{42}.serialize()};
