@@ -12,8 +12,8 @@
 namespace logging {
 class NullLogger : public BaseLogger {
       public:
-        void print(LogLevel, std::string_view, std::string_view) override{};
-        void println(LogLevel, std::string_view, std::string_view) override{};
+        void print(LogLevel, Tag, std::string_view) override{};
+        void println(LogLevel, Tag, std::string_view) override{};
 };
 
 template <locking::Mutex M = DefaultMutex> class Logger {

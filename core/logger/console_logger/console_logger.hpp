@@ -5,10 +5,8 @@
 namespace logging {
 class ConsoleLogger : public BaseLogger {
       public:
-        void print(LogLevel level, std::string_view tag,
-                   std::string_view value) override;
-        void println(LogLevel level, std::string_view tag,
-                     std::string_view value) override;
+        void print(LogLevel level, Tag tag, std::string_view value) override;
+        void println(LogLevel level, Tag tag, std::string_view value) override;
 
       private:
         bool check_level(LogLevel level);

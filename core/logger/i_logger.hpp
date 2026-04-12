@@ -3,7 +3,6 @@
 #include <string_view>
 
 namespace logging {
-
 enum class LogLevel { Verbose, Debug, Info, Warning, Error, Fatal, None };
 
 constexpr std::string_view level_to_string(LogLevel level) {
@@ -25,20 +24,29 @@ constexpr std::string_view level_to_string(LogLevel level) {
         }
 }
 
+struct Tag {
+        constexpr Tag(std::string_view value) : value(value) {
+        }
+        constexpr Tag(const char *value) : value(value) {
+        }
+        std::string_view value;
+};
+
 struct ILogger {
         virtual ~ILogger() = default;
-        virtual void print(LogLevel level, std::string_view tag,
-                           std::string_view value) = 0;
-        virtual void println(LogLevel level, std::string_view tag,
+        virtual void print(LogLevel level, Tag tag, std::string_view value) = 0;
+        virtual void println(LogLevel level, Tag tag,
                              std::string_view value) = 0;
         virtual LogLevel get_level() const = 0;
 
         void print(std::string_view value) {
                 print(get_level(), "", value);
         }
-        void print(std::string_view tag, std::string_view value) {
-                print(get_level(), tag, value);
+
+        void print(Tag tag, std::string_view value) {
+                print(get_level(), tag.value, value);
         }
+
         void print(LogLevel l, std::string_view value) {
                 print(l, "", value);
         }
@@ -46,29 +54,35 @@ struct ILogger {
         void println(std::string_view value) {
                 println(get_level(), "", value);
         }
-        void println(std::string_view tag, std::string_view value) {
-                println(get_level(), tag, value);
+
+        void println(Tag tag, std::string_view value) {
+                println(get_level(), tag.value, value);
         }
+
         void println(LogLevel l, std::string_view value) {
                 println(l, "", value);
         }
 
         template <typename... Args>
-        void print_fmt(LogLevel l, std::string_view tag,
-                       std::format_string<Args...> fmt, Args &&...args) {
-                print(l, tag, std::format(fmt, std::forward<Args>(args)...));
-        }
-        template <typename... Args>
-        void print_fmt(std::string_view tag, std::format_string<Args...> fmt,
+        void print_fmt(LogLevel l, Tag tag, std::format_string<Args...> fmt,
                        Args &&...args) {
-                print(get_level(), tag,
+                print(l, tag.value,
                       std::format(fmt, std::forward<Args>(args)...));
         }
+
+        template <typename... Args>
+        void print_fmt(Tag tag, std::format_string<Args...> fmt,
+                       Args &&...args) {
+                print(get_level(), tag.value,
+                      std::format(fmt, std::forward<Args>(args)...));
+        }
+
         template <typename... Args>
         void print_fmt(LogLevel l, std::format_string<Args...> fmt,
                        Args &&...args) {
                 print(l, "", std::format(fmt, std::forward<Args>(args)...));
         }
+
         template <typename... Args>
         void print_fmt(std::format_string<Args...> fmt, Args &&...args) {
                 print(get_level(), "",
@@ -76,21 +90,25 @@ struct ILogger {
         }
 
         template <typename... Args>
-        void println_fmt(LogLevel l, std::string_view tag,
-                         std::format_string<Args...> fmt, Args &&...args) {
-                println(l, tag, std::format(fmt, std::forward<Args>(args)...));
-        }
-        template <typename... Args>
-        void println_fmt(std::string_view tag, std::format_string<Args...> fmt,
+        void println_fmt(LogLevel l, Tag tag, std::format_string<Args...> fmt,
                          Args &&...args) {
-                println(get_level(), tag,
+                println(l, tag.value,
                         std::format(fmt, std::forward<Args>(args)...));
         }
+
+        template <typename... Args>
+        void println_fmt(Tag tag, std::format_string<Args...> fmt,
+                         Args &&...args) {
+                println(get_level(), tag.value,
+                        std::format(fmt, std::forward<Args>(args)...));
+        }
+
         template <typename... Args>
         void println_fmt(LogLevel l, std::format_string<Args...> fmt,
                          Args &&...args) {
                 println(l, "", std::format(fmt, std::forward<Args>(args)...));
         }
+
         template <typename... Args>
         void println_fmt(std::format_string<Args...> fmt, Args &&...args) {
                 println(get_level(), "",
@@ -111,5 +129,4 @@ class BaseLogger : public ILogger {
       protected:
         LogLevel level = LogLevel::Info;
 };
-
 } // namespace logging
