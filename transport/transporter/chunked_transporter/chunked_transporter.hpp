@@ -33,24 +33,30 @@ class ChunkedTransporter : public BaseTransporter {
               timeout(timeout) {
                 this->transporter->set_receiver(
                     [this](result::Result<Data> result) {
-                        if (result.failed()) {
-                                logging::logger().println(
-                                    logging::LogLevel::Error, TAG,
-                                    result.error());
-                                return;
-                        }
-                        handle_data(std::move(result).value());
-                });
+                            if (result.failed()) {
+                                    logging::logger().println(
+                                        logging::LogLevel::Error, TAG,
+                                        result.error());
+                                    return;
+                            }
+                            handle_data(std::move(result).value());
+                    });
         };
 
         result::Try send(Data &&data) override {
                 logging::logger().println(logging::LogLevel::Debug, TAG,
                                           "send called, payload size: " +
                                               std::to_string(data.size()));
+                const auto mtu = transporter->get_mtu();
+                logging::logger().println(logging::LogLevel::Verbose, TAG,
+                                          "mtu: " + std::to_string(mtu));
                 Data packet;
                 {
                         std::lock_guard<M> lock_e(egress_mutex);
                         std::lock_guard<M> lock_i(ingress_mutex);
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "acquired egress+ingress locks for send");
                         remove_stale();
                         const auto session_result =
                             generate_session_id(egress_map, next_session_id);
@@ -58,9 +64,15 @@ class ChunkedTransporter : public BaseTransporter {
                                 return result::err(session_result.error());
                         }
                         next_session_id = session_result.value();
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "generated session id: " +
+                                std::to_string(next_session_id) +
+                                ", egress sessions active: " +
+                                std::to_string(egress_map.size()));
 
-                        const auto result = Chunk::fragment(
-                            data, transporter->get_mtu(), next_session_id);
+                        const auto result =
+                            Chunk::fragment(data, mtu, next_session_id);
                         if (result.failed()) {
                                 logging::logger().println(
                                     logging::LogLevel::Error, TAG,
@@ -87,6 +99,12 @@ class ChunkedTransporter : public BaseTransporter {
                         session.tries = 0;
                         session.timestamp = std::chrono::steady_clock::now();
                         packet = session.chunks.at(0).to_buf();
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "session " + std::to_string(next_session_id) +
+                                " registered in egress map, first chunk "
+                                "size: " +
+                                std::to_string(packet.size()));
                 }
 
                 logging::logger().println(logging::LogLevel::Debug, TAG,
@@ -146,10 +164,16 @@ class ChunkedTransporter : public BaseTransporter {
                                                   type_result.error());
                         return;
                 }
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "packet type resolved, acquiring locks");
                 std::function<void()> defer;
                 {
                         std::lock_guard<M> lock_e(egress_mutex);
                         std::lock_guard<M> lock_i(ingress_mutex);
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "acquired egress+ingress locks for handle_data");
                         remove_stale();
                         switch (type_result.value()) {
                         case PacketType::ack:
@@ -171,9 +195,19 @@ class ChunkedTransporter : public BaseTransporter {
                                 defer = handle_chunk(std::move(data));
                                 break;
                         }
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "releasing locks, defer set: " +
+                                std::string(defer ? "yes" : "no"));
                 }
                 if (defer) {
+                        logging::logger().println(logging::LogLevel::Verbose,
+                                                  TAG,
+                                                  "executing deferred action");
                         defer();
+                        logging::logger().println(logging::LogLevel::Verbose,
+                                                  TAG,
+                                                  "deferred action complete");
                 }
         }
 
@@ -190,6 +224,10 @@ class ChunkedTransporter : public BaseTransporter {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   result.error());
                 }
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "nack sent, session: " + std::to_string(session_id) +
+                        " index: " + std::to_string(index));
         }
 
         void send_ack(SessionId session_id, Indexer index) {
@@ -205,6 +243,10 @@ class ChunkedTransporter : public BaseTransporter {
                         logging::logger().println(logging::LogLevel::Error, TAG,
                                                   result.error());
                 }
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "ack sent, session: " + std::to_string(session_id) +
+                        " index: " + std::to_string(index));
         }
 
         std::function<void()> handle_ack(Data &&data) {
@@ -248,6 +290,11 @@ class ChunkedTransporter : public BaseTransporter {
 
                 session.tries = 0;
                 const uint16_t total_chunks = chunks[ack.index].total_chunks;
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "ack progress: " + std::to_string(ack.index + 1) + "/" +
+                        std::to_string(total_chunks) +
+                        " session: " + std::to_string(ack.session_id));
                 if (ack.index >= total_chunks - 1) {
                         logging::logger().println(
                             logging::LogLevel::Debug, TAG,
@@ -261,16 +308,43 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto sid = ack.session_id;
                 const auto next_index = ack.index + 1;
 
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "deferring send of chunk " + std::to_string(next_index) +
+                        " for session: " + std::to_string(sid));
+
                 return [this, sid, next_index]() {
-                        std::lock_guard<M> lock_e(this->egress_mutex);
-                        std::lock_guard<M> lock_i(this->ingress_mutex);
-                        auto it = this->egress_map.find(sid);
-                        if (it != this->egress_map.end() &&
-                            next_index < it->second.chunks.size()) {
-                                auto packet =
+                        Data packet;
+                        {
+                                std::lock_guard<M> lock_e(this->egress_mutex);
+                                std::lock_guard<M> lock_i(this->ingress_mutex);
+                                logging::logger().println(
+                                    logging::LogLevel::Verbose, TAG,
+                                    "acquired locks in ack defer, looking up "
+                                    "session: " +
+                                        std::to_string(sid));
+                                auto it = this->egress_map.find(sid);
+                                if (it == this->egress_map.end() ||
+                                    next_index >= it->second.chunks.size()) {
+                                        logging::logger().println(
+                                            logging::LogLevel::Verbose, TAG,
+                                            "session " + std::to_string(sid) +
+                                                " gone or chunk " +
+                                                std::to_string(next_index) +
+                                                " out of bounds, skipping");
+                                        return;
+                                }
+                                packet =
                                     it->second.chunks.at(next_index).to_buf();
-                                this->transporter->send(std::move(packet));
+                                logging::logger().println(
+                                    logging::LogLevel::Verbose, TAG,
+                                    "prepared chunk " +
+                                        std::to_string(next_index) +
+                                        " for session: " + std::to_string(sid) +
+                                        ", size: " +
+                                        std::to_string(packet.size()));
                         }
+                        this->transporter->send(std::move(packet));
                 };
         }
 
@@ -308,6 +382,12 @@ class ChunkedTransporter : public BaseTransporter {
                 }
 
                 ++session.tries;
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "nack try " + std::to_string(session.tries) + "/" +
+                        std::to_string(max_tries) +
+                        " for session: " + std::to_string(nack.session_id) +
+                        " index: " + std::to_string(nack.index));
                 if (session.tries >= max_tries) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
@@ -320,16 +400,44 @@ class ChunkedTransporter : public BaseTransporter {
                 const auto sid = nack.session_id;
                 const auto retry_index = nack.index;
 
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "deferring retry of chunk " + std::to_string(retry_index) +
+                        " for session: " + std::to_string(sid));
+
                 return [this, sid, retry_index]() {
-                        std::lock_guard<M> lock_e(this->egress_mutex);
-                        std::lock_guard<M> lock_i(this->ingress_mutex);
-                        auto it = this->egress_map.find(sid);
-                        if (it != this->egress_map.end() &&
-                            retry_index < it->second.chunks.size()) {
-                                auto packet =
+                        Data packet;
+                        {
+                                std::lock_guard<M> lock_e(this->egress_mutex);
+                                std::lock_guard<M> lock_i(this->ingress_mutex);
+                                logging::logger().println(
+                                    logging::LogLevel::Verbose, TAG,
+                                    "acquired locks in nack defer, looking up "
+                                    "session: " +
+                                        std::to_string(sid));
+                                auto it = this->egress_map.find(sid);
+                                if (it == this->egress_map.end() ||
+                                    retry_index >= it->second.chunks.size()) {
+                                        logging::logger().println(
+                                            logging::LogLevel::Verbose, TAG,
+                                            "session " + std::to_string(sid) +
+                                                " gone or chunk " +
+                                                std::to_string(retry_index) +
+                                                " out of bounds, skipping "
+                                                "retry");
+                                        return;
+                                }
+                                packet =
                                     it->second.chunks.at(retry_index).to_buf();
-                                this->transporter->send(std::move(packet));
+                                logging::logger().println(
+                                    logging::LogLevel::Verbose, TAG,
+                                    "prepared retry chunk " +
+                                        std::to_string(retry_index) +
+                                        " for session: " + std::to_string(sid) +
+                                        ", size: " +
+                                        std::to_string(packet.size()));
                         }
+                        this->transporter->send(std::move(packet));
                 };
         }
 
@@ -354,6 +462,11 @@ class ChunkedTransporter : public BaseTransporter {
                         std::to_string(chunk.payload.size()));
 
                 const auto expected_index = get_next_index(chunk.session_id);
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "expected index: " + std::to_string(expected_index) +
+                        " got: " + std::to_string(chunk.index) +
+                        " session: " + std::to_string(chunk.session_id));
                 if (chunk.index != expected_index) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
@@ -372,6 +485,11 @@ class ChunkedTransporter : public BaseTransporter {
 
                 const auto it = ingress_map.find(sid);
                 if (it == ingress_map.end()) {
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "new ingress session: " + std::to_string(sid) +
+                                ", total chunks: " +
+                                std::to_string(total_chunks));
                         std::vector<Chunk> chunks;
                         chunks.resize(total_chunks);
                         chunks[chunk_index] = std::move(chunk);
@@ -390,6 +508,11 @@ class ChunkedTransporter : public BaseTransporter {
                                     sid, total_chunks, chunk_index);
                         }
 
+                        logging::logger().println(
+                            logging::LogLevel::Verbose, TAG,
+                            "deferring ack for new session: " +
+                                std::to_string(sid) +
+                                " index: " + std::to_string(expected_index));
                         return [this, sid, expected_index]() {
                                 this->send_ack(sid, expected_index);
                         };
@@ -398,6 +521,12 @@ class ChunkedTransporter : public BaseTransporter {
                 auto &session = it->second;
                 session.timestamp = std::chrono::steady_clock::now();
                 auto &chunks = session.chunks;
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "existing ingress session: " + std::to_string(sid) +
+                        ", chunks received so far: " +
+                        std::to_string(chunk_index + 1) + "/" +
+                        std::to_string(total_chunks));
                 if (chunk_index >= chunks.size()) {
                         logging::logger().println(
                             logging::LogLevel::Error, TAG,
@@ -419,6 +548,10 @@ class ChunkedTransporter : public BaseTransporter {
                             chunk_index);
                 }
 
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "deferring ack for session: " + std::to_string(sid) +
+                        " index: " + std::to_string(expected_index));
                 return [this, sid, expected_index]() {
                         this->send_ack(sid, expected_index);
                 };
@@ -450,6 +583,11 @@ class ChunkedTransporter : public BaseTransporter {
                                           "done sending session: " +
                                               std::to_string(id));
                 egress_map.erase(id);
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "egress session " + std::to_string(id) +
+                        " erased, active egress sessions: " +
+                        std::to_string(egress_map.size()));
         }
 
         std::function<void()>
@@ -463,6 +601,10 @@ class ChunkedTransporter : public BaseTransporter {
                         return defered_function;
                 }
 
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "assembling session: " + std::to_string(session_id) +
+                        ", total chunks: " + std::to_string(total_chunks));
                 auto assemble_result = Chunk::assemble(
                     std::move(result).value(), session_id, total_chunks);
 
@@ -485,6 +627,11 @@ class ChunkedTransporter : public BaseTransporter {
                                 std::to_string(assemble_result.value().size()));
                 }
 
+                logging::logger().println(
+                    logging::LogLevel::Verbose, TAG,
+                    "deferring ack + callback for session: " +
+                        std::to_string(session_id) +
+                        " last index: " + std::to_string(last_index));
                 return
                     [this, session_id, last_index,
                      assemble_result = std::move(assemble_result)]() mutable {
@@ -496,6 +643,10 @@ class ChunkedTransporter : public BaseTransporter {
                                         logging::LogLevel::Error, TAG,
                                         callback_result.error());
                             }
+                            logging::logger().println(
+                                logging::LogLevel::Verbose, TAG,
+                                "callback complete for session: " +
+                                    std::to_string(session_id));
                     };
         }
 
