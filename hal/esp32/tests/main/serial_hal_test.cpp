@@ -1,10 +1,10 @@
 #include "serial_hal_test.hpp"
-#include "serial_hal.hpp"
+#include "esp32_serial_hal.hpp"
 #include <driver/uart.h>
 #include <hal/uart_types.h>
 #include <unity.h>
 
-static serial::SerialHal *hal = nullptr;
+static serial::Esp32SerialHal *hal = nullptr;
 
 static void test_constructor_does_not_crash() {
         static constexpr auto BAUDRATE = 115200;
@@ -12,8 +12,8 @@ static void test_constructor_does_not_crash() {
         static constexpr auto UART = UART_NUM_1;
         static constexpr auto TX_PIN = 7;
         static constexpr auto RX_PIN = 6;
-        hal =
-            new serial::SerialHal(UART, RX_PIN, TX_PIN, BAUDRATE, BUFFER_SIZE);
+        hal = new serial::Esp32SerialHal(UART, TX_PIN, RX_PIN, BAUDRATE,
+                                         BUFFER_SIZE);
         TEST_ASSERT_TRUE(true);
 }
 

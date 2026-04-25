@@ -6,26 +6,26 @@
 
 namespace logging {
 
-void Logger::print(LogLevel level, std::string_view tag,
-                   std::string_view value) {
+void Logger::print(LogLevel level, Tag tag, std::string_view value) {
+        const char *t = tag.value.data();
         switch (level) {
         case LogLevel::Verbose:
-                ESP_LOGV(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGV(t, "%.*s", (int)value.size(), value.data());
                 break;
         case LogLevel::Debug:
-                ESP_LOGD(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGD(t, "%.*s", (int)value.size(), value.data());
                 break;
         case LogLevel::Info:
-                ESP_LOGI(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGI(t, "%.*s", (int)value.size(), value.data());
                 break;
         case LogLevel::Warning:
-                ESP_LOGW(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGW(t, "%.*s", (int)value.size(), value.data());
                 break;
         case LogLevel::Error:
-                ESP_LOGE(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGE(t, "%.*s", (int)value.size(), value.data());
                 break;
         case LogLevel::Fatal:
-                ESP_LOGE(tag.data(), "%.*s", (int)value.size(), value.data());
+                ESP_LOGE(t, "%.*s", (int)value.size(), value.data());
                 esp_restart();
                 break;
         case LogLevel::None:
@@ -33,8 +33,7 @@ void Logger::print(LogLevel level, std::string_view tag,
         }
 }
 
-void Logger::println(LogLevel level, std::string_view tag,
-                     std::string_view value) {
+void Logger::println(LogLevel level, Tag tag, std::string_view value) {
         print(level, tag, value);
 }
 } // namespace logging

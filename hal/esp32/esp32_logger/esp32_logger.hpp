@@ -7,9 +7,7 @@ class Logger : public BaseLogger {
       public:
         // INFO: ESP logging automatically appends newlines so print and println
         // are the same
-        virtual void print(LogLevel level, std::string_view tag,
-                           std::string_view value) override;
-        virtual void println(LogLevel level, std::string_view tag,
-                             std::string_view value) override;
+        void print(LogLevel level, Tag tag, std::string_view value) override;
+        void println(LogLevel level, Tag tag, std::string_view value) override;
 };
 } // namespace logging

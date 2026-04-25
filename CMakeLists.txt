@@ -12,6 +12,7 @@ if(ESP_PLATFORM)
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/ble_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/serial_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/http_client
+                ${CMAKE_CURRENT_SOURCE_DIR}/hal/mqtt_hal
                 ${CMAKE_CURRENT_SOURCE_DIR}/hal/store
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport
                 ${CMAKE_CURRENT_SOURCE_DIR}/transport/dispatcher
@@ -74,6 +75,7 @@ else()
         add_subdirectory(hal/ble_hal)
         add_subdirectory(hal/serial_hal)
         add_subdirectory(hal/http_client)
+        add_subdirectory(hal/mqtt_hal)
         add_subdirectory(hal/store)
         add_subdirectory(hal/posix/posix_serial_hal)
         add_subdirectory(transport)
