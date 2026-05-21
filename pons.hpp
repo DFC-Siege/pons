@@ -16,18 +16,20 @@
 #include "platform_semaphore.hpp"
 
 // HAL interfaces
-#include "i_ble_hal.hpp"
 #include "serial_hal.hpp"
 #include "i_http_client.hpp"
 #include "mqtt_hal.hpp"
 #include "i_store.hpp"
 
-// ESP32 HAL implementations
-#include "ble_hal.hpp"             // esp32_ble_hal
+// ESP32 HAL implementations (BLE excluded by default — requires NimBLE build of Arduino-ESP32)
 #include "esp32_serial_hal.hpp"
 #include "http_client.hpp"         // esp32_http_client
 #include "mqtt_client.hpp"         // esp32_mqtt
 #include "esp32_logger.hpp"
+#ifdef PONS_ENABLE_BLE
+#include "i_ble_hal.hpp"
+#include "ble_hal.hpp"             // esp32_ble_hal (NimBLE)
+#endif
 
 // Transport
 #include "transport_data.hpp"
