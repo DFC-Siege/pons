@@ -1,0 +1,103 @@
+{
+  "name": "pons",
+  "version": "0.1.0",
+  "description": "Transport, HAL and serialization framework for embedded systems (BLE, MQTT, Serial, HTTP, NVS).",
+  "keywords": "embedded, esp32, arduino, ble, mqtt, serial, http, transport, hal, serializer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danieldasilva/pons"
+  },
+  "authors": [
+    {
+      "name": "Daniel da Silva",
+      "email": "daniel@doetdingen.nl",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "headers": ["pons.hpp"],
+  "export": {
+    "exclude": [
+      "build-*",
+      "hal/posix",
+      "hal/rp2040",
+      "hal/esp32/tests",
+      "**/build",
+      "**/*_test.cpp",
+      "cmake",
+      "compile_commands*.json",
+      ".env"
+    ]
+  },
+  "build": {
+    "srcDir": ".",
+    "srcFilter": [
+      "+<core/result/>",
+      "+<core/logger/>",
+      "+<core/serializer/>",
+      "+<core/mutex/>",
+      "+<core/semaphore/>",
+      "+<platform/>",
+      "+<hal/ble_hal/>",
+      "+<hal/serial_hal/>",
+      "+<hal/http_client/>",
+      "+<hal/mqtt_hal/>",
+      "+<hal/store/>",
+      "+<hal/esp32/esp32_ble_hal/>",
+      "+<hal/esp32/esp32_serial_hal/>",
+      "+<hal/esp32/esp32_http_client/>",
+      "+<hal/esp32/esp32_mqtt/>",
+      "+<hal/esp32/esp32_logger/>",
+      "+<hal/esp32/esp32_store/nvs_store/>",
+      "+<transport/>",
+      "+<transport/dispatcher/>",
+      "+<transport/requester/>",
+      "+<transport/transporter/>",
+      "+<transport/transporter/chunked_transporter/>",
+      "+<transport/transporter/direct_transporter/>",
+      "+<transport/transporter/serial_transporter/>",
+      "-<core/logger/console_logger/>",
+      "-<hal/posix/>",
+      "-<hal/rp2040/>",
+      "-<hal/esp32/tests/>",
+      "-<**/*_test.cpp>",
+      "-<**/test_*.cpp>",
+      "-<build*/>"
+    ],
+    "includeDir": ".",
+    "flags": [
+      "-std=gnu++20",
+      "-Wno-unused-parameter",
+      "-Wno-missing-field-initializers",
+      "-DPONS_ARDUINO=1",
+      "-Icore/result",
+      "-Icore/logger",
+      "-Icore/serializer",
+      "-Icore/mutex",
+      "-Icore/semaphore",
+      "-Iplatform",
+      "-Ihal/ble_hal",
+      "-Ihal/serial_hal",
+      "-Ihal/http_client",
+      "-Ihal/mqtt_hal",
+      "-Ihal/store",
+      "-Ihal/esp32/esp32_ble_hal",
+      "-Ihal/esp32/esp32_serial_hal",
+      "-Ihal/esp32/esp32_http_client",
+      "-Ihal/esp32/esp32_mqtt",
+      "-Ihal/esp32/esp32_logger",
+      "-Ihal/esp32/esp32_store/nvs_store",
+      "-Itransport",
+      "-Itransport/dispatcher",
+      "-Itransport/requester",
+      "-Itransport/transporter",
+      "-Itransport/transporter/chunked_transporter",
+      "-Itransport/transporter/direct_transporter",
+      "-Itransport/transporter/serial_transporter"
+    ],
+    "libArchive": true,
+    "libLDFMode": "off"
+  }
+}
