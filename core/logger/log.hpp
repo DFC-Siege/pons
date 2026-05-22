@@ -3,12 +3,7 @@
 #include "i_logger.hpp"
 #include "logger.hpp"
 
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
-#endif
-
-namespace log {
+namespace lg {
 
 #define PONS_LOG_DEFINE_LEVEL(NS, METHOD, FN, LEVEL)                           \
         namespace NS {                                                         \
@@ -39,8 +34,4 @@ PONS_LOG_DEFINE_NS(println, println_fmt)
 #undef PONS_LOG_DEFINE_NS
 #undef PONS_LOG_DEFINE_LEVEL
 
-} // namespace log
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+} // namespace lg
