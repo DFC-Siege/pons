@@ -57,7 +57,7 @@
       "+<transport/transporter/chunked_transporter/>",
       "+<transport/transporter/direct_transporter/>",
       "+<transport/transporter/serial_transporter/>",
-      "-<core/logger/console_logger/>",
+      "+<core/logger/console_logger/>",
       "-<hal/esp32/esp32_ble_hal/>",
       "-<hal/posix/>",
       "-<hal/rp2040/>",
