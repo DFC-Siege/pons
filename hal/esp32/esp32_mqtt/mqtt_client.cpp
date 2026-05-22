@@ -67,8 +67,9 @@ void MqttClient::event_handler(void *arg, esp_event_base_t /*base*/,
         auto *self = static_cast<MqttClient *>(arg);
         auto *event = static_cast<esp_mqtt_event_handle_t>(event_data);
 
-        if (event_id != MQTT_EVENT_DATA)
+        if (event_id != MQTT_EVENT_DATA) {
                 return;
+        }
 
         if (event->current_data_offset == 0) {
                 self->pending_topic.assign(event->topic, event->topic_len);

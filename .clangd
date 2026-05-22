@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: build-posix
+  CompilationDatabase: compile_commands_esp32.json
   Add: ["-Wno-unknown-argument"]
   Remove:
     [
